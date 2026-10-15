@@ -1,0 +1,33 @@
+rules_version = '2';
+
+// Reglas de seguridad de "Notas de L".
+// Solo tu cuenta de Google verificada puede leer o escribir, y únicamente dentro de su propia carpeta.
+// Cualquier otra petición (otra cuenta, sin sesión, otra ruta) se rechaza en el servidor de Google.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function esL() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'la86926@gmail.com';
+    }
+
+    match /users/{uid}/pages/{pageId} {
+      allow read, delete: if esL() && request.auth.uid == uid;
+      allow create, update: if esL() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 1000000;
+    }
+
+    match /users/{uid}/meta/{docId} {
+      allow read, write: if esL() && request.auth.uid == uid;
+    }
+
+    // Todo lo demás está prohibido
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

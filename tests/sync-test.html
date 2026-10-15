@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- Política de seguridad: solo se ejecutan los scripts de esta app (sin scripts inline ni de terceros,
+       salvo los de Google necesarios para iniciar sesión). Mitiga ataques XSS. -->
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'self' notasdel:;
+    script-src 'self' notasdel: https://apis.google.com https://www.gstatic.com;
+    style-src 'self' notasdel: 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' notasdel: https://fonts.gstatic.com;
+    img-src 'self' notasdel: data: blob: https:;
+    connect-src 'self' notasdel: https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://apis.google.com;
+    frame-src https://*.firebaseapp.com https://*.web.app https://accounts.google.com https://apis.google.com;
+    object-src 'none';
+    base-uri 'self';
+    form-action 'none'" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Prueba de sincronización</title>
+  <link rel="icon" href="../assets/icon.png" />
+  <link rel="apple-touch-icon" href="../assets/icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/styles.css" />
+</head>
+<body>
+  <div id="root"></div>
+  <noscript>Notas de L necesita JavaScript.</noscript>
+
+  <!-- Librerías incluidas en el proyecto (funciona sin conexión y sin CDNs) -->
+  <script src="../vendor/react.production.min.js"></script>
+  <script src="../vendor/react-dom.production.min.js"></script>
+  <script src="../vendor/htm.umd.js"></script>
+
+  <script src="mock-firebase.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="config-override.js"></script>
+  <script src="../js/utils.js"></script>
+  <script src="../js/store.js"></script>
+  <script src="../js/sync.js"></script>
+  <script src="../js/editor.js"></script>
+  <script src="../js/database.js"></script>
+  <script src="../js/app.js"></script>
+</body>
+</html>
