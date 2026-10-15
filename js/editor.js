@@ -50,6 +50,12 @@
     { id: 'db-board', group: P, label: 'Base de datos: Tablero', desc: 'Kanban por estado.', icon: '▥', kw: 'board kanban tablero base datos' },
     { id: 'db-calendar', group: P, label: 'Base de datos: Calendario', desc: 'Vista mensual.', icon: '📅', kw: 'calendar calendario base datos' },
     { id: 'db-gallery', group: P, label: 'Base de datos: Galería', desc: 'Tarjetas.', icon: '▤', kw: 'gallery galeria tarjetas base datos' },
+    { id: 'db-list', group: P, label: 'Base de datos: Lista', desc: 'Lista sencilla.', icon: '☰', kw: 'list lista base datos' },
+    { id: 'db-timeline', group: P, label: 'Base de datos: Cronograma', desc: 'Línea de tiempo (Gantt).', icon: '⟶', kw: 'timeline cronograma gantt linea tiempo base datos' },
+    { id: 'db-chart', group: P, label: 'Base de datos: Gráfico', desc: 'Barras, líneas o anillo.', icon: '📊', kw: 'chart grafico barras base datos' },
+    { id: 'db-form', group: P, label: 'Base de datos: Formulario', desc: 'Recoge respuestas.', icon: '📝', kw: 'form formulario encuesta base datos' },
+    { id: 'db-dashboard', group: P, label: 'Panel (dashboard)', desc: 'Indicadores y gráficos.', icon: '◫', kw: 'dashboard panel kpi indicadores' },
+    { id: 'dblink', group: P, label: 'Vista vinculada de base de datos', desc: 'Muestra una base existente aquí.', icon: '↗', kw: 'linked vinculada vista base datos existente' },
     { id: 'image', group: M, label: 'Imagen', desc: 'Sube o enlaza una imagen.', icon: '🖼', kw: 'image imagen foto picture img' },
     { id: 'bookmark', group: M, label: 'Marcador web', desc: 'Tarjeta con un enlace.', icon: '🔖', kw: 'bookmark marcador enlace link web' },
     { id: 'embed', group: M, label: 'Insertar (embed)', desc: 'YouTube, Vimeo, Spotify, Figma, Google Docs…', icon: '▶', kw: 'embed video youtube vimeo spotify figma insertar' },
@@ -76,6 +82,11 @@
   // Elementos del menú "@": fechas, recordatorios y páginas
   const isoPlus = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const mentionItems = (q, onlyPages = false) => {
+    if (onlyPages === 'db') {
+      const n = normalizeStr(q);
+      return Object.values(NC.getState().pages).filter((p) => p.type === 'database' && !A.isInTrash(p.id) && (!n || normalizeStr(p.title || '').includes(n)))
+        .slice(0, 10).map((p) => ({ kind: 'db', id: p.id, label: p.title || 'Sin título', desc: 'Base de datos', icon: NC.iconText(p.icon, '🗃️'), group: 'Bases de datos' }));
+    }
     const n = normalizeStr(q);
     const s = NC.getState();
     const dates = onlyPages ? [] : [
@@ -612,13 +623,17 @@
         document.execCommand('insertText', false, '@');
         const rect = NC.caretRect() || el.getBoundingClientRect();
         setMention({ blockId: b.id, query: '', index: 0, rect, link: id === 'linkpage' });
-      } else if (id === 'newpage' || id.startsWith('db-')) {
-        const isDb = id.startsWith('db-');
-        const childId = A.createPage({
-          parentId: pageId && !page.rowOf ? pageId : null,
-          type: isDb ? 'database' : 'doc',
-          layout: isDb ? id.slice(3) : undefined,
-        });
+      } else if (id === 'dblink') {
+        NC.setCaret(el, NC.getCaretOffset(el));
+        document.execCommand('insertText', false, '@');
+        const rect = NC.caretRect() || el.getBoundingClientRect();
+        setMention({ blockId: b.id, query: '', index: 0, rect, link: 'db' });
+      } else if (id.startsWith('db-')) {
+        // base de datos en línea, como en Notion
+        const childId = A.createPage({ parentId: pageId && !page.rowOf ? pageId : null, type: 'database', layout: id.slice(3), title: 'Nueva base de datos' });
+        targetFor('dbview', { dbId: childId });
+      } else if (id === 'newpage') {
+        const childId = A.createPage({ parentId: pageId && !page.rowOf ? pageId : null, type: 'doc' });
         targetFor('page', { pageId: childId });
         NC.navigate(childId);
       }
@@ -632,6 +647,12 @@
       const el = elOf(menu.blockId);
       if (!b || !el) return;
       eraseTrigger(el, menu.query.length + 1);
+      if (item.kind === 'db') {
+        A.updateBlock(pageId, b.id, { html: el.innerHTML });
+        if (!el.textContent.trim()) A.updateBlock(pageId, b.id, { type: 'dbview', dbId: item.id, html: '' });
+        else A.insertBlock(pageId, b.id, 'dbview', { dbId: item.id, indent: b.indent });
+        return;
+      }
       if (menu.link && item.kind === 'page') {
         A.updateBlock(pageId, b.id, { html: el.innerHTML });
         if (!el.textContent.trim()) A.updateBlock(pageId, b.id, { type: 'page', pageId: item.id, html: '' });

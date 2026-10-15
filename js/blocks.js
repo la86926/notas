@@ -196,6 +196,20 @@
     </div>`;
   };
 
+  /* ---------- Base de datos en línea / vista vinculada ---------- */
+  R.dbview = function DbViewBlock({ b, ctx }) {
+    const s = NC.useStore();
+    const page = s.pages[b.dbId];
+    if (!page || !page.db || A.isInTrash(b.dbId)) return html`<div className="block-empty">🗃️ Base de datos eliminada o en la papelera</div>`;
+    return html`<div className="inline-db" onKeyDown=${(e) => e.stopPropagation()}>
+      <div className="inline-db-title">
+        <a onClick=${() => NC.navigate(page.id)}><${NC.Icon} icon=${page.icon} fallback="🗃️" /> ${page.title || 'Sin título'}</a>
+        ${page.id !== ctx.pageId && page.parentId !== ctx.pageId && html`<span className="muted small">↗ vista vinculada</span>`}
+      </div>
+      <${NC.DatabaseView} page=${page} inline=${true} />
+    </div>`;
+  };
+
   /* ---------- Botón ---------- */
   R.button = function ButtonBlock({ b, ctx }) {
     const [cfg, setCfg] = useState(null);

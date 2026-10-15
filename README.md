@@ -20,7 +20,10 @@ Inicias sesión con tu cuenta de Google y tus cambios se sincronizan en la nube 
 - **Imágenes y archivos** comprimidos y sincronizados aparte de la página (sin límite por página).
 - **Sincronización en tiempo real** con fusión por bloque: si editas bloques distintos en el Mac y en la web a la vez, se conservan ambos cambios.
 - **Código** con colores de sintaxis, **Mover a…** otra página, modo oscuro.
-- **Bases de datos** con vistas Tabla, Tablero, Calendario y Galería.
+- **Bases de datos** con 9 vistas: Tabla, Tablero, Calendario, Galería, Lista, Cronograma (Gantt arrastrable), Gráfico (barras, líneas, anillo), Formulario y Panel (KPI, gráficos y listas de varias bases).
+- **Propiedades**: texto, número (con formato de moneda o porcentaje), selección, selección múltiple, estado, fecha, casilla, URL, correo, teléfono, archivos, relación (también bidireccional), rollup, fórmula, fecha de creación, última edición e ID automático.
+- **Fórmulas** al estilo Notion: `prop("Horas") * prop("Precio")`, `if()`, `dateBetween()`, `formatDate()`, `concat()`… con vista previa y errores en vivo.
+- **Filtros** (Y/O), **orden múltiple**, **agrupar**, **propiedades ocultas**, **cálculos** al pie de columna, **subelementos**, y bases de datos **en línea** o **vinculadas** dentro de cualquier página.
 
 ## Instalar en un Mac
 
@@ -91,7 +94,8 @@ js/editor.js          editor por bloques, columnas, pestañas, menú "/", @menci
 js/blocks.js          tabla, índice, ecuación, embed, marcador, archivo, botón
 js/extras.js          login, comentarios, enlaces inversos, recordatorios, plantillas, buscar
 js/history.js         deshacer/rehacer e historial de versiones
-js/database.js        bases de datos: tabla, tablero, calendario y galería
+js/dbcore.js          motor de bases de datos: fórmulas, relaciones, rollups, filtros, grupos, cálculos
+js/database.js        vistas de bases de datos y menús de propiedades
 js/app.js             barra lateral, páginas, búsqueda, papelera, ajustes y cuenta
 vendor/               React 18.3.1, htm 3.1.1, KaTeX 0.16.11 y Firebase 10.12.2 (compat)
 mac/NotasDeL/main.swift   app nativa (WKWebView + login de Google + Llavero)

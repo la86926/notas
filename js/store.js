@@ -98,20 +98,19 @@
   }
 
   function newDb(layout = 'table') {
-    const status = {
-      id: NC.uid(), name: 'Estado', type: 'select', width: 160,
-      options: [
-        { id: NC.uid(), name: 'Por hacer', color: 'red' },
-        { id: NC.uid(), name: 'En progreso', color: 'yellow' },
-        { id: NC.uid(), name: 'Hecho', color: 'green' },
-      ],
-    };
+    const status = { id: NC.uid(), name: 'Estado', type: 'status', width: 160, options: NC.statusOptions() };
     const date = { id: NC.uid(), name: 'Fecha', type: 'date', width: 160, options: [] };
-    const views = [{ id: NC.uid(), name: 'Tabla', type: 'table', filter: '', sort: null }];
-    if (layout !== 'table') views.unshift({ id: NC.uid(), name: VIEW_NAMES[layout], type: layout, filter: '', sort: null });
-    return { titleName: 'Nombre', titleWidth: 260, props: [status, date], rows: [], views, viewId: views[0].id };
+    const views = [{ id: NC.uid(), name: 'Tabla', type: 'table', filter: '', sort: null, filters: [], sorts: [] }];
+    if (layout !== 'table') views.unshift({ id: NC.uid(), name: VIEW_NAMES[layout] || 'Vista', type: layout, filter: '', sort: null, filters: [], sorts: [] });
+    if (layout === 'timeline') {
+      const end = { id: NC.uid(), name: 'Fin', type: 'date', width: 160, options: [] };
+      date.name = 'Inicio';
+      views[0].timeline = { start: date.id, end: end.id };
+      return { titleName: 'Nombre', titleWidth: 260, props: [status, date, end], rows: [], views, viewId: views[0].id, seq: 0 };
+    }
+    return { titleName: 'Nombre', titleWidth: 260, props: [status, date], rows: [], views, viewId: views[0].id, seq: 0 };
   }
-  const VIEW_NAMES = { table: 'Tabla', board: 'Tablero', calendar: 'Calendario', gallery: 'Galería' };
+  const VIEW_NAMES = { table: 'Tabla', board: 'Tablero', calendar: 'Calendario', gallery: 'Galería', list: 'Lista', timeline: 'Cronograma', chart: 'Gráfico', form: 'Formulario', dashboard: 'Panel' };
   NC.VIEW_NAMES = VIEW_NAMES;
 
   const A = (NC.actions = {});
@@ -471,10 +470,14 @@
   /* ---------- Base de datos ---------- */
   const dbOf = (dbId) => state.pages[dbId].db;
 
-  A.addRow = (dbId, values = {}, index = null, title = '') => {
+  A.addRow = (dbId, values = {}, index = null, title = '', parentRow = null) => {
+    const db = dbOf(dbId);
     const row = newPage({ rowOf: dbId, title });
     row.blocks = [blk('paragraph')];
     row.values = { ...values };
+    db.seq = Math.max(db.seq || 0, db.rows.length) + 1; // ID autoincremental
+    row.seq = db.seq;
+    if (parentRow) row.parentRow = parentRow;
     state.pages[row.id] = row;
     const rows = dbOf(dbId).rows;
     if (index == null) rows.push(row.id);
@@ -498,10 +501,18 @@
     emit();
   };
 
-  A.addProp = (dbId, type = 'text', name) => {
+  NC.statusOptions = () => [
+    { id: NC.uid(), name: 'Sin empezar', color: 'gray', group: 'todo' },
+    { id: NC.uid(), name: 'En curso', color: 'blue', group: 'progress' },
+    { id: NC.uid(), name: 'Listo', color: 'green', group: 'done' },
+  ];
+  A.addProp = (dbId, type = 'text', name, extra = {}) => {
     const db = dbOf(dbId);
-    const labels = { text: 'Texto', number: 'Número', select: 'Selección', multi: 'Etiquetas', date: 'Fecha', checkbox: 'Casilla', url: 'URL', created: 'Creado' };
-    const prop = { id: NC.uid(), name: name || labels[type] || 'Propiedad', type, width: 160, options: [] };
+    const labels = { text: 'Texto', number: 'Número', select: 'Selección', multi: 'Etiquetas', status: 'Estado', date: 'Fecha', checkbox: 'Casilla', url: 'URL', email: 'Correo', phone: 'Teléfono', files: 'Archivos', relation: 'Relación', rollup: 'Rollup', formula: 'Fórmula', created: 'Creado', edited: 'Editado', uid: 'ID' };
+    const prop = { id: NC.uid(), name: name || labels[type] || 'Propiedad', type, width: 160, options: type === 'status' ? NC.statusOptions() : [], ...extra };
+    if (type === 'formula' && prop.formula == null) prop.formula = '';
+    if (type === 'relation' && !prop.relation) prop.relation = { dbId };
+    if (type === 'rollup' && !prop.rollup) prop.rollup = { fn: 'show' };
     db.props.push(prop);
     emit();
     return prop.id;
@@ -524,21 +535,23 @@
       let v = r.values[prop.id];
       if (v == null) return;
       // a texto plano primero
-      let text = Array.isArray(v) ? v.map(nameOf).join(', ') : prop.type === 'select' ? nameOf(v) : String(v);
+      let text = Array.isArray(v) ? v.map((x) => (typeof x === 'string' ? nameOf(x) || (state.pages[x] && state.pages[x].title) || '' : x.name || '')).join(', ') : prop.type === 'select' || prop.type === 'status' ? nameOf(v) : String(v);
       if (prop.type === 'checkbox') text = v ? 'Sí' : '';
       let out = null;
-      if (['text', 'url'].includes(toType)) out = text;
+      if (['formula', 'rollup', 'created', 'edited', 'uid'].includes(toType)) out = null;
+      else if (['relation', 'files'].includes(toType)) out = [];
+      else if (['text', 'url', 'email', 'phone'].includes(toType)) out = text;
       else if (toType === 'number') out = isNaN(parseFloat(text)) ? null : parseFloat(text);
       else if (toType === 'checkbox') out = !!text && text !== 'false';
       else if (toType === 'date') out = /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
-      else if (toType === 'select' || toType === 'multi') {
+      else if (toType === 'select' || toType === 'multi' || toType === 'status') {
         const names = text.split(',').map((s) => s.trim()).filter(Boolean);
         const ids = names.map((n) => {
           let o = prop.options.find((x) => x.name === n);
           if (!o) prop.options.push((o = { id: NC.uid(), name: n, color: NC.randomColor() }));
           return o.id;
         });
-        out = toType === 'select' ? ids[0] || null : ids;
+        out = toType === 'multi' ? ids : ids[0] || null;
       }
       r.values[prop.id] = out;
     });
@@ -551,6 +564,8 @@
       if (v.groupBy === propId) v.groupBy = null;
       if (v.dateProp === propId) v.dateProp = null;
       if (v.sort && v.sort.propId === propId) v.sort = null;
+      if (v.sorts) v.sorts = v.sorts.filter((x) => x.propId !== propId);
+      if (v.filters) v.filters = v.filters.filter((x) => x.propId !== propId);
     });
     emit();
   };
@@ -582,9 +597,57 @@
     emit();
   };
 
+  /* Relaciones: si son bidireccionales, se actualiza también la propiedad inversa */
+  A.setRelation = (rowId, propId, ids) => {
+    const row = state.pages[rowId];
+    const db = dbOf(row.rowOf);
+    const prop = db.props.find((p) => p.id === propId);
+    const before = (row.values && row.values[propId]) || [];
+    row.values = { ...(row.values || {}), [propId]: ids };
+    row.updatedAt = now();
+    const rev = prop && prop.relation && prop.relation.twoWayPropId;
+    if (rev) {
+      const added = ids.filter((x) => !before.includes(x));
+      const removed = before.filter((x) => !ids.includes(x));
+      added.concat(removed).forEach((tid) => {
+        const t = state.pages[tid];
+        if (!t) return;
+        const cur = (t.values && t.values[rev]) || [];
+        const next = added.includes(tid) ? (cur.includes(rowId) ? cur : [...cur, rowId]) : cur.filter((x) => x !== rowId);
+        t.values = { ...(t.values || {}), [rev]: next };
+        t.updatedAt = now();
+      });
+    }
+    emit();
+  };
+  A.makeTwoWay = (dbId, propId) => {
+    const prop = dbOf(dbId).props.find((p) => p.id === propId);
+    const target = prop.relation && state.pages[prop.relation.dbId];
+    if (!target || !target.db) return;
+    const back = { id: NC.uid(), name: (state.pages[dbId].title || 'Relación'), type: 'relation', width: 160, options: [], relation: { dbId, twoWayPropId: prop.id } };
+    target.db.props.push(back);
+    prop.relation.twoWayPropId = back.id;
+    // rellenar la inversa con los valores existentes
+    dbOf(dbId).rows.forEach((rid) => {
+      const r = state.pages[rid];
+      ((r && r.values && r.values[prop.id]) || []).forEach((tid) => {
+        const t = state.pages[tid];
+        if (!t) return;
+        const cur = (t.values && t.values[back.id]) || [];
+        if (!cur.includes(rid)) t.values = { ...(t.values || {}), [back.id]: [...cur, rid] };
+      });
+    });
+    emit();
+  };
+  A.updateDb = (dbId, patch) => {
+    Object.assign(dbOf(dbId), patch);
+    state.pages[dbId].updatedAt = now();
+    emit();
+  };
+
   A.addView = (dbId, type) => {
     const db = dbOf(dbId);
-    const v = { id: NC.uid(), name: VIEW_NAMES[type], type, filter: '', sort: null };
+    const v = { id: NC.uid(), name: VIEW_NAMES[type], type, filter: '', sort: null, filters: [], sorts: [] };
     db.views.push(v);
     db.viewId = v.id;
     emit();
