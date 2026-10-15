@@ -6,20 +6,21 @@ window.NOTAS_CONFIG = {
 
   // 1) Firebase → Configuración del proyecto → Tus apps → App web → "firebaseConfig".
   //    Pega aquí el objeto completo. Mientras sea null, la app funciona solo en local.
-  firebase: null,
-  // firebase: {
-  //   apiKey: '…',
-  //   authDomain: 'tu-proyecto.firebaseapp.com',
-  //   projectId: 'tu-proyecto',
-  //   appId: '…',
-  // },
+  firebase: {
+    apiKey: 'AIzaSyCP0ANDqwiORzYBv1F4PFVliR9RNczarVE',
+    authDomain: 'notas-de-l.firebaseapp.com',
+    projectId: 'notas-de-l',
+    storageBucket: 'notas-de-l.firebasestorage.app',
+    messagingSenderId: '254436539916',
+    appId: '1:254436539916:web:a9b70ff068047e62dd7829',
+  },
 
   // 2) Solo estas cuentas de Google pueden iniciar sesión (además lo exigen las reglas de Firestore).
   allowedEmails: ['la86926@gmail.com'],
 
   // 3) App de Mac: ID de cliente OAuth de tipo "iOS" creado en Google Cloud (mismo proyecto que Firebase),
   //    p. ej. '1234567890-abc123.apps.googleusercontent.com'.
-  desktopGoogleClientId: '',
+  desktopGoogleClientId: '254436539916-83tpf9o3reujukad8coo73v5emgapk0k.apps.googleusercontent.com',
 
   // Enlace de descarga del instalador para Mac que se muestra en la versión web.
   macDownloadUrl: 'dist/Notas-de-L.dmg',
