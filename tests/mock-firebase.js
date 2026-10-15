@@ -2,6 +2,8 @@
  * window.__mock permite simular otro dispositivo: remoteSet(path, data) / remoteDelete(path). */
 (function () {
   const docs = new Map(); // ruta → datos
+  // Datos iniciales opcionales para probar la vista pública (sessionStorage.__mockDocs = JSON {ruta: datos})
+  try { Object.entries(JSON.parse(sessionStorage.getItem('__mockDocs') || '{}')).forEach(([k, v]) => docs.set(k, v)); } catch (e) { /* */ }
   const colListeners = new Map(); // ruta colección → Set(cb)
   const docListeners = new Map(); // ruta doc → Set(cb)
   const parentOf = (path) => path.split('/').slice(0, -1).join('/');

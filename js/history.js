@@ -104,6 +104,7 @@
   const words = (json) => { const d = JSON.parse(json); return NC.htmlToText((d.blocks || []).map((b) => b.html || b.text || '').join(' ')).split(/\s+/).filter(Boolean).length; };
 
   function maybeSaveVersion(id, json) {
+    if (NC.publicMode) return;
     const now = Date.now();
     if (lastSaved[id] && now - lastSaved[id] < 10 * 60e3) return;
     lastSaved[id] = now;

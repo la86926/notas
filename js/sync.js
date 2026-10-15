@@ -94,6 +94,8 @@
   const db = firebase.firestore();
   try { db.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) { /* ya inicializado */ }
   auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+  sync.firestore = () => db;
+  sync.user = () => user;
 
   let unsubPages = null;
   let unsubMeta = null;
@@ -107,6 +109,7 @@
     return u.emailVerified && (!list.length || list.includes((u.email || '').toLowerCase()));
   };
 
+  if (NC.publicMode) return; // las páginas públicas no inician sesión ni sincronizan
   auth.onAuthStateChanged(async (u) => {
     stopListeners();
     user = null;

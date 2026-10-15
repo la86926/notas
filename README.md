@@ -24,6 +24,8 @@ Inicias sesión con tu cuenta de Google y tus cambios se sincronizan en la nube 
 - **Propiedades**: texto, número (con formato de moneda o porcentaje), selección, selección múltiple, estado, fecha, casilla, URL, correo, teléfono, archivos, relación (también bidireccional), rollup, fórmula, fecha de creación, última edición e ID automático.
 - **Fórmulas** al estilo Notion: `prop("Horas") * prop("Precio")`, `if()`, `dateBetween()`, `formatDate()`, `concat()`… con vista previa y errores en vivo.
 - **Filtros** (Y/O), **orden múltiple**, **agrupar**, **propiedades ocultas**, **cálculos** al pie de columna, **subelementos**, y bases de datos **en línea** o **vinculadas** dentro de cualquier página.
+- **Publicar en la web** (botón **Compartir**): crea un sitio de solo lectura con la página y, si quieres, sus subpáginas y bases de datos. El enlace tiene la forma `https://la86926.github.io/notas/#/p/…`. Los cambios se vuelven a publicar solos en unos segundos y puedes dejar de publicar cuando quieras. Los comentarios nunca se publican.
+- **Calendario** (barra lateral): vista mensual con agenda que reúne tus eventos de **Google Calendar** (solo lectura), las fechas de tus bases de datos y tus recordatorios. El botón **+** crea un evento en Google Calendar.
 
 ## Instalar en un Mac
 
@@ -64,6 +66,8 @@ En GitHub, entra en **Settings → Pages**. En **Source** elige *Deploy from a b
 - **Los valores de `firebaseConfig` no son secretos:** identifican el proyecto, igual que una dirección web. La protección real son las reglas anteriores.
 - **Content-Security-Policy** en `index.html`: solo se ejecutan los scripts de la app (incluidos en `vendor/`, sin CDNs) y los de Google para el login. El HTML de las notas se sanea al cargarlo, también el que llega de la nube.
 - **App de Mac:** el login usa la ventana segura del sistema (`ASWebAuthenticationSession`) con PKCE. La sesión se guarda en el **Llavero de macOS**, no en archivos.
+- **Páginas publicadas:** solo lo que publicas se copia a `public/` y `publicAssets/`. Cualquiera puede leer esas copias, pero solo tu cuenta puede escribirlas o borrarlas. Tus notas privadas siguen protegidas.
+- **Google Calendar:** se pide únicamente el permiso de solo lectura (`calendar.readonly`). En la web, el token dura una hora y se guarda solo en la pestaña. En el Mac, se renueva con la sesión guardada en el Llavero. Google puede avisar de que la app no está verificada: pulsa **Configuración avanzada → Ir a Notas de L**.
 - Al **cerrar sesión** puedes borrar las notas locales, algo recomendable en equipos compartidos.
 
 ## Cómo funciona la sincronización

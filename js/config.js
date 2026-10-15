@@ -26,6 +26,12 @@ window.NOTAS_CONFIG = {
   // portadas en Unsplash. Sin clave, el buscador usa Openverse (fotos con licencia libre).
   unsplashAccessKey: '',
 
+  // ID de cliente OAuth "Aplicación web" (Google Cloud) para conectar Google Calendar desde la web.
+  googleWebClientId: '254436539916-3q4q6jjd8urppcjs9vfb3atb8s5dft4i.apps.googleusercontent.com',
+
+  // Dirección de la web publicada (se usa para los enlaces de páginas públicas).
+  publicUrl: 'https://la86926.github.io/notas/',
+
   // Enlace de descarga del instalador para Mac que se muestra en la versión web.
   macDownloadUrl: 'dist/Notas-de-L.dmg',
 };

@@ -211,6 +211,7 @@
       <div className="side-nav">
         <button className="side-link" onClick=${() => A.setUI({ search: true })}><span>🔍</span> Buscar <kbd>⌘K</kbd></button>
         <button className="side-link" onClick=${() => A.setUI({ inbox: true })}><span>📥</span> Bandeja de entrada ${due > 0 && html`<span className="badge">${due}</span>`}</button>
+        <button className=${'side-link' + (location.hash.startsWith('#/calendario') ? ' active' : '')} onClick=${() => { location.hash = '#/calendario'; }}><span>📆</span> Calendario</button>
         <button className="side-link" onClick=${() => A.setUI({ settings: true })}><span>⚙️</span> Ajustes</button>
         <button className="side-link" onClick=${(e) => setNewMenu(e.currentTarget)}><span>✚</span> Nueva página</button>
       </div>
@@ -259,6 +260,7 @@
   function Topbar({ page }) {
     const s = NC.useStore();
     const [menu, setMenu] = useState(null);
+    const [share, setShare] = useState(null);
     const crumbs = [];
     let p = page;
     while (p) {
@@ -276,6 +278,8 @@
       <span className="grow"></span>
       ${page.locked && html`<button className="icon-btn locked" title="Página bloqueada: clic para desbloquear" onClick=${() => A.updatePage(page.id, { locked: false })}>🔒 Bloqueada</button>`}
       <span className="muted small edited">Editado ${NC.timeAgo(page.updatedAt)}</span>
+      <button className=${'icon-btn share' + (page.published ? ' on' : '')} title="Compartir y publicar en la web" onClick=${(e) => setShare(e.currentTarget)}>${page.published ? '🌐 Publicada' : 'Compartir'}</button>
+      ${share && html`<${NC.SharePopover} page=${page} anchor=${share} onClose=${() => setShare(null)} />`}
       <button className="icon-btn" title="Comentarios de la página" onClick=${() => A.setUI({ pageComments: page.id })}>💬</button>
       <button className="icon-btn" title=${page.favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} onClick=${() => A.updatePage(page.id, { favorite: !page.favorite })}>${page.favorite ? '★' : '☆'}</button>
       <button className="icon-btn" title="Más" onClick=${(e) => setMenu(e.currentTarget)}>···</button>
@@ -297,7 +301,7 @@
         if (page.type !== 'database') NC.firstBlockFns[page.id] && NC.firstBlockFns[page.id]();
       }
     };
-    return html`<h1 ref=${ref} className="page-title" contentEditable=${page.locked ? 'false' : 'plaintext-only'} suppressContentEditableWarning
+    return html`<h1 ref=${ref} className="page-title" contentEditable=${page.locked || NC.publicMode ? 'false' : 'plaintext-only'} suppressContentEditableWarning
       data-placeholder="Sin título" onKeyDown=${onKeyDown}
       onInput=${(e) => { const t = e.currentTarget.textContent.replace(/\n/g, ''); if (!t) e.currentTarget.innerHTML = ''; A.updatePage(page.id, { title: t }); }} />`;
   }
@@ -366,7 +370,7 @@
     const inTrash = A.isInTrash(page.id);
     const cover = NC.coverStyle(page.cover);
     const isDb = page.type === 'database';
-    const locked = !!page.locked;
+    const locked = !!page.locked || NC.publicMode;
     return html`<div className=${'page font-' + (page.font || 'default') + (page.fullWidth || isDb ? ' full' : '') + (page.smallText ? ' small-text' : '') + (locked ? ' locked' : '')}>
       ${inTrash && html`<div className="trash-banner">Esta página está en la papelera.
         <button onClick=${() => A.restorePage(page.id)}>Restaurar</button>
@@ -382,8 +386,8 @@
           ${!(page.comments || []).length && html`<button onClick=${() => setCommentsOpen(true)}>💬 Añadir comentario</button>`}
         </div>`}
         <${Title} key=${'title-' + page.id} page=${page} />
-        <${NC.Backlinks} page=${page} />
-        <${NC.PageComments} page=${page} open=${commentsOpen} setOpen=${setCommentsOpen} />
+        ${!NC.publicMode && html`<${NC.Backlinks} page=${page} />`}
+        ${!NC.publicMode && html`<${NC.PageComments} page=${page} open=${commentsOpen} setOpen=${setCommentsOpen} />`}
         ${page.rowOf && html`<${NC.RowProps} row=${page} />`}
         ${isDb ? html`<${NC.DatabaseView} page=${page} />` : html`<${NC.Editor} key=${'editor-' + page.id} page=${page} readOnly=${locked} />`}
         ${!isDb && !locked && html`<${NC.EmptyPageStarter} page=${page} />`}
@@ -614,13 +618,18 @@
       return () => document.removeEventListener('keydown', key);
     }, []);
 
+    if (NC.publicMode) return html`<${NC.PublicApp} PageView=${PageView} />`;
     // Pantalla de inicio de sesión cuando la sincronización está configurada
     if (NC.sync.enabled && !sync.user && !NC.isLocalMode()) return html`<${NC.LoginScreen} />`;
+    const calendarRoute = location.hash.startsWith('#/calendario');
 
     return html`<div className=${'app' + (s.settings.sidebarCollapsed ? ' collapsed' : '')}>
       ${!s.settings.sidebarCollapsed && html`<${Sidebar} />`}
       <main className="main">
-        ${cur
+        ${calendarRoute ? html`<div className="main-scroll">
+              ${s.settings.sidebarCollapsed && html`<button className="icon-btn" onClick=${() => A.setSettings({ sidebarCollapsed: false })}>☰</button>`}
+              <${NC.CalendarHome} /></div>`
+          : cur
           ? html`<${Topbar} page=${cur} />
               ${s.ui.find && html`<${NC.FindBar} pageId=${cur.id} onClose=${() => A.setUI({ find: false })} />`}
               <div className="main-scroll"><${PageView} key=${cur.id} pageId=${cur.id} /></div>`

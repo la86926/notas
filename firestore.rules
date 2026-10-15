@@ -34,6 +34,22 @@ service cloud.firestore {
       allow read, write: if esL() && request.auth.uid == uid;
     }
 
+    // Páginas publicadas en la web: cualquiera puede leerlas, solo tu cuenta puede escribirlas
+    match /public/{rootId} {
+      allow read: if true;
+      allow write: if esL();
+      match /pages/{pageId} {
+        allow read: if true;
+        allow write: if esL()
+          && (request.resource == null || (request.resource.data.data is string && request.resource.data.data.size() < 1000000));
+      }
+    }
+    match /publicAssets/{assetId} {
+      allow read: if true;
+      allow write: if esL()
+        && (request.resource == null || (request.resource.data.data is string && request.resource.data.data.size() < 1040000));
+    }
+
     // Todo lo demás está prohibido
     match /{document=**} {
       allow read, write: if false;

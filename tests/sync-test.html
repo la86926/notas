@@ -7,11 +7,11 @@
        salvo los de Google necesarios para iniciar sesión). Mitiga ataques XSS. -->
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'self' notasdel:;
-    script-src 'self' notasdel: https://apis.google.com https://www.gstatic.com;
+    script-src 'self' notasdel: https://apis.google.com https://www.gstatic.com https://accounts.google.com;
     style-src 'self' notasdel: 'unsafe-inline' https://fonts.googleapis.com;
     font-src 'self' notasdel: https://fonts.gstatic.com;
     img-src 'self' notasdel: data: blob: https:;
-    connect-src 'self' notasdel: https://api.unsplash.com https://api.openverse.org https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://apis.google.com;
+    connect-src 'self' notasdel: https://accounts.google.com https://api.unsplash.com https://api.openverse.org https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebaseapp.com https://apis.google.com;
     frame-src https://*.firebaseapp.com https://*.web.app https://accounts.google.com https://apis.google.com https://www.youtube-nocookie.com https://player.vimeo.com https://open.spotify.com https://www.figma.com https://www.loom.com https://codepen.io https://docs.google.com https://www.google.com https://calendar.google.com;
     object-src 'none';
     base-uri 'self';
@@ -23,7 +23,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../vendor/katex/katex.min.css" />
-  <link rel="stylesheet" href="../css/styles.css?v=7" />
+  <link rel="stylesheet" href="../css/styles.css?v=9" />
 </head>
 <body>
   <div id="root"></div>
@@ -37,19 +37,21 @@
   <script src="../vendor/prism/prism.js"></script>
 
   <script src="mock-firebase.js"></script>
-  <script src="../js/config.js?v=7"></script>
+  <script src="../js/config.js?v=9"></script>
   <script src="config-override.js"></script>
-  <script src="../js/utils.js?v=7"></script>
-  <script src="../js/store.js?v=7"></script>
-  <script src="../js/sync.js?v=7"></script>
-  <script src="../js/assets.js?v=7"></script>
-  <script src="../js/editor.js?v=7"></script>
-  <script src="../js/blocks.js?v=7"></script>
-  <script src="../js/extras.js?v=7"></script>
-  <script src="../js/media.js?v=7"></script>
-  <script src="../js/history.js?v=7"></script>
-  <script src="../js/dbcore.js?v=7"></script>
-  <script src="../js/database.js?v=7"></script>
-  <script src="../js/app.js?v=7"></script>
+  <script src="../js/utils.js?v=9"></script>
+  <script src="../js/store.js?v=9"></script>
+  <script src="../js/sync.js?v=9"></script>
+  <script src="../js/assets.js?v=9"></script>
+  <script src="../js/editor.js?v=9"></script>
+  <script src="../js/blocks.js?v=9"></script>
+  <script src="../js/extras.js?v=9"></script>
+  <script src="../js/media.js?v=9"></script>
+  <script src="../js/history.js?v=9"></script>
+  <script src="../js/dbcore.js?v=9"></script>
+  <script src="../js/database.js?v=9"></script>
+  <script src="../js/publish.js?v=9"></script>
+  <script src="../js/calendar.js?v=9"></script>
+  <script src="../js/app.js?v=9"></script>
 </body>
 </html>

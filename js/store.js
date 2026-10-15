@@ -5,6 +5,12 @@
   const NC = window.NC;
   const KEY = 'notioncito:v1';
 
+  // Modo público: una página publicada (#/p/…) se muestra aislada, sin leer ni guardar datos locales
+  NC.publicMode = /^#\/p\//.test(location.hash);
+  window.addEventListener('hashchange', () => {
+    if (/^#\/p\//.test(location.hash) !== NC.publicMode) location.reload();
+  });
+
   let state;
   let version = 0;
   const listeners = new Set();
@@ -15,6 +21,7 @@
 
   /* ---------- Persistencia ---------- */
   function save() {
+    if (NC.publicMode) return;
     try {
       localStorage.setItem(KEY, JSON.stringify({ ...state, ui: { current: state.ui.current } }));
     } catch (e) {
@@ -697,11 +704,21 @@
 
   /* ---------- Navegación (hash) ---------- */
   NC.navigate = (id) => {
+    if (NC.publicMode && id && NC.publicRoot) {
+      location.hash = '#/p/' + NC.publicRoot + (id === NC.publicRoot ? '' : '/' + id);
+      return;
+    }
     const target = id ? '#/' + id : '#/';
     if (location.hash !== target) location.hash = target;
     else syncHash();
   };
   function syncHash() {
+    if (NC.publicMode) {
+      const [, root, sub] = location.hash.match(/^#\/p\/([^/?]+)(?:\/([^/?]+))?/) || [];
+      state.ui.current = sub || root || null;
+      state.ui.peek = null;
+      return emit(false);
+    }
     const id = location.hash.replace(/^#\/?/, '').split('?')[0];
     state.ui.current = id && state.pages[id] ? id : null;
     state.ui.peek = null;
@@ -801,12 +818,22 @@
     return s;
   }
 
-  state = load();
+  state = NC.publicMode ? normalize({ pages: {}, rootIds: [] }) : load();
   if (!state) {
     state = seed();
     save();
   }
+  // Carga las páginas publicadas (solo en memoria)
+  A.loadPublic = (pages, root) => {
+    sanitizeState({ pages });
+    state.pages = pages;
+    state.rootIds = [root];
+    const [, , sub] = location.hash.match(/^#\/p\/([^/?]+)(?:\/([^/?]+))?/) || [];
+    state.ui.current = sub && pages[sub] ? sub : root;
+    emit(false);
+  };
   NC.initRoute = () => {
+    if (NC.publicMode || /^#\/calendario/.test(location.hash)) return;
     const id = location.hash.replace(/^#\/?/, '').split('?')[0];
     if (id && state.pages[id]) state.ui.current = id;
     else {

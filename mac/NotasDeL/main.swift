@@ -130,8 +130,28 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         }
     }
 
+    /// Token de acceso a las API de Google (p. ej. Calendar) renovado con el refresh token.
+    func accessToken(clientId: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
+        guard let refresh = Keychain.load() else {
+            return completion(.failure(NSError(domain: "auth", code: 3, userInfo: [NSLocalizedDescriptionKey: "no-session"])))
+        }
+        tokenRequest(["grant_type": "refresh_token", "refresh_token": refresh, "client_id": clientId], completion: completion)
+    }
+
     /// Inicio de sesión interactivo en una ventana segura del sistema.
     func signIn(clientId: String, completion: @escaping (Result<String, Error>) -> Void) {
+        authorize(clientId: clientId, scope: "openid email profile") { r in
+            switch r {
+            case .success(let json):
+                if let id = json["id_token"] as? String { completion(.success(id)) }
+                else { completion(.failure(NSError(domain: "auth", code: 6, userInfo: [NSLocalizedDescriptionKey: "sin id_token"]))) }
+            case .failure(let e): completion(.failure(e))
+            }
+        }
+    }
+
+    /// Autorización OAuth con PKCE para los permisos indicados (incrementales).
+    func authorize(clientId: String, scope: String, completion: @escaping (Result<[String: Any], Error>) -> Void) {
         let verifier = random(48)
         let challenge = b64url(Data(SHA256.hash(data: Data(verifier.utf8))))
         let state = random(24)
@@ -140,7 +160,7 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
         var c = URLComponents(string: "https://accounts.google.com/o/oauth2/v2/auth")!
         c.queryItems = [
             .init(name: "client_id", value: clientId), .init(name: "redirect_uri", value: redirect),
-            .init(name: "response_type", value: "code"), .init(name: "scope", value: "openid email profile"),
+            .init(name: "response_type", value: "code"), .init(name: "scope", value: scope), .init(name: "include_granted_scopes", value: "true"),
             .init(name: "code_challenge", value: challenge), .init(name: "code_challenge_method", value: "S256"),
             .init(name: "state", value: state), .init(name: "prompt", value: "select_account"),
         ]
@@ -160,8 +180,7 @@ final class GoogleAuth: NSObject, ASWebAuthenticationPresentationContextProvidin
                 switch r {
                 case .success(let json):
                     if let refresh = json["refresh_token"] as? String { Keychain.save(refresh) }
-                    if let id = json["id_token"] as? String { completion(.success(id)) }
-                    else { completion(.failure(NSError(domain: "auth", code: 6, userInfo: [NSLocalizedDescriptionKey: "sin id_token"]))) }
+                    completion(.success(json))
                 case .failure(let e): completion(.failure(e))
                 }
             }
@@ -235,6 +254,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         case "googleSignIn": auth.signIn(clientId: clientId, completion: reply)
         case "googleSilent": auth.silent(clientId: clientId, completion: reply)
         case "googleSignOut": Keychain.delete()
+        case "googleCalendarAuth", "googleAccessToken":
+            let done: (Result<[String: Any], Error>) -> Void = { [weak self] r in
+                var payload: [String: Any] = [:]
+                switch r {
+                case .success(let json):
+                    payload["accessToken"] = json["access_token"] as? String ?? ""
+                    payload["expiresIn"] = json["expires_in"] as? Int ?? 3000
+                    payload["scope"] = json["scope"] as? String ?? ""
+                case .failure(let e): payload["error"] = e.localizedDescription
+                }
+                let data = String(data: try! JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!
+                DispatchQueue.main.async { self?.webView.evaluateJavaScript("window.NC && NC.gcal && NC.gcal._nativeResult(\(data))") }
+            }
+            if type == "googleCalendarAuth" {
+                auth.authorize(clientId: clientId, scope: "openid email profile https://www.googleapis.com/auth/calendar.readonly", completion: done)
+            } else {
+                auth.accessToken(clientId: clientId, completion: done)
+            }
         case "print": printPage()
         default: break
         }

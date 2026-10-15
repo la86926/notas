@@ -102,6 +102,14 @@
       const rec = await tx('readonly', (os) => os.get(id));
       if (rec) { mem.set(id, rec.data); return rec.data; }
     } catch (e) { /* sin IndexedDB */ }
+    if (NC.publicMode) {
+      try {
+        const d = await NC.sync.firestore().collection('publicAssets').doc(id).get();
+        const data = d.exists && d.data().data;
+        if (typeof data === 'string' && /^data:/.test(data)) { mem.set(id, data); return data; }
+      } catch (e) { /* */ }
+      return null;
+    }
     const c = remote();
     if (!c) return null;
     try {
@@ -206,5 +214,5 @@
     }
     if (changed) { A.updatePage(s.ui.current || Object.keys(s.pages)[0], {}); NC.toast(`Imágenes optimizadas en ${changed} ${changed === 1 ? 'página' : 'páginas'} para poder sincronizarlas`); }
   };
-  setTimeout(() => NC.migrateInlineAssets().catch((e) => console.warn(e)), 800);
+  if (!NC.publicMode) setTimeout(() => NC.migrateInlineAssets().catch((e) => console.warn(e)), 800);
 })();
