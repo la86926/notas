@@ -10,7 +10,7 @@
   const native = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.notas;
   const MAX_DOC = 900 * 1024;
 
-  const status = { state: CFG.firebase ? 'signedout' : 'off', user: null, error: null, lastSync: null };
+  const status = { state: CFG.firebase ? 'starting' : 'off', user: null, error: null, lastSync: null };
   const listeners = new Set();
   let version = 0;
   const setStatus = (patch) => {

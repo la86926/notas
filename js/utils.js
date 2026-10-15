@@ -39,6 +39,18 @@
         const keep = {};
         if (child.tagName === 'A' && SAFE_URL.test(child.getAttribute('href') || '')) keep.href = child.getAttribute('href');
         if (child.tagName === 'FONT' && SAFE_COLOR.test(child.getAttribute('color') || '')) keep.color = child.getAttribute('color');
+        // Menciones (@página, @fecha, recordatorios)
+        if (child.tagName === 'SPAN' && /(^|\s)mention(\s|$)/.test(child.getAttribute('class') || '')) {
+          const pid = child.getAttribute('data-page') || '';
+          const date = child.getAttribute('data-date') || '';
+          if (/^[a-z0-9]{4,20}$/i.test(pid)) keep['data-page'] = pid;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(date)) keep['data-date'] = date;
+          if (keep['data-page'] || keep['data-date']) {
+            keep.class = 'mention' + (keep['data-date'] ? ' mention-date' : '');
+            keep.contenteditable = 'false';
+            if (child.getAttribute('data-remind') === '1') keep['data-remind'] = '1';
+          }
+        }
         const st = child.style;
         const style = [];
         if (st && st.color && SAFE_COLOR.test(st.color)) style.push(`color:${st.color}`);

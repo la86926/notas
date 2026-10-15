@@ -10,6 +10,12 @@
   const pageTitle = (p) => p.title || 'Sin título';
 
   /* ---------- Menú de página (compartido por barra lateral y cabecera) ---------- */
+  const wordCount = (page) => NC.htmlToText(NC.allBlocks(page).map((b) => b.html || b.text || '').join(' ')).split(/\s+/).filter(Boolean).length;
+  NC.printPage = () => {
+    if (NC.sync && NC.sync.isDesktop) window.webkit.messageHandlers.notas.postMessage({ type: 'print' });
+    else window.print();
+  };
+
   function PageMenu({ page, anchor, onClose, extended = false }) {
     const run = (fn) => () => { fn(); onClose(); };
     const exportMd = () => {
@@ -18,35 +24,43 @@
       NC.download((page.title || 'Sin título').replace(/[\\/:*?"<>|]/g, '-') + '.md', md);
     };
     return html`<${NC.Popover} anchor=${anchor} onClose=${onClose} className="menu" align=${extended ? 'right' : 'left'}>
-      <button className="menu-item" onClick=${run(() => A.updatePage(page.id, { favorite: !page.favorite }))}>
-        <span>${page.favorite ? '★' : '☆'}</span> ${page.favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}</button>
-      <button className="menu-item" onClick=${run(() => NC.navigate(A.duplicatePage(page.id)))}><span>⧉</span> Duplicar</button>
-      <button className="menu-item" onClick=${run(() => { navigator.clipboard && navigator.clipboard.writeText(location.href.split('#')[0] + '#/' + page.id); NC.toast('Enlace copiado'); })}><span>🔗</span> Copiar enlace</button>
-      <button className="menu-item" onClick=${run(exportMd)}><span>⬇</span> Exportar a Markdown</button>
       ${extended && html`
-        <div className="menu-sep"></div>
         <div className="menu-label">Estilo</div>
         <div className="font-picker">
           ${[['default', 'Ag', 'Predeterminada'], ['serif', 'Ag', 'Serif'], ['mono', 'Ag', 'Mono']].map(([f, s, l]) => html`
             <button key=${f} className=${'font-opt f-' + f + (page.font === f ? ' selected' : '')} onClick=${() => A.updatePage(page.id, { font: f })}>
               <span>${s}</span><small>${l}</small></button>`)}
         </div>
-        <label className="menu-item toggle-row">
-          <span>↔</span> Ancho completo
-          <input type="checkbox" checked=${!!page.fullWidth} onChange=${() => A.updatePage(page.id, { fullWidth: !page.fullWidth })} />
-        </label>`}
+        <label className="menu-item toggle-row"><span>A</span> Texto pequeño
+          <input type="checkbox" checked=${!!page.smallText} onChange=${() => A.updatePage(page.id, { smallText: !page.smallText })} /></label>
+        <label className="menu-item toggle-row"><span>↔</span> Ancho completo
+          <input type="checkbox" checked=${!!page.fullWidth} onChange=${() => A.updatePage(page.id, { fullWidth: !page.fullWidth })} /></label>
+        <label className="menu-item toggle-row"><span>🔒</span> Bloquear página
+          <input type="checkbox" checked=${!!page.locked} onChange=${() => A.updatePage(page.id, { locked: !page.locked })} /></label>
+        <div className="menu-sep"></div>`}
+      <button className="menu-item" onClick=${run(() => A.updatePage(page.id, { favorite: !page.favorite }))}>
+        <span>${page.favorite ? '★' : '☆'}</span> ${page.favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}</button>
+      <button className="menu-item" onClick=${run(() => NC.navigate(A.duplicatePage(page.id)))}><span>⧉</span> Duplicar</button>
+      <button className="menu-item" onClick=${run(() => { navigator.clipboard && navigator.clipboard.writeText(location.href.split('#')[0] + '#/' + page.id); NC.toast('Enlace copiado'); })}><span>🔗</span> Copiar enlace</button>
+      ${extended && html`
+        <button className="menu-item" onClick=${run(() => A.setUI({ find: true }))}><span>🔍</span> Buscar en la página<kbd>⌘F</kbd></button>
+        <button className="menu-item" onClick=${run(() => A.setUI({ history: page.id }))}><span>🕘</span> Historial de versiones</button>
+        <button className="menu-item" onClick=${run(() => A.setUI({ pageComments: page.id }))}><span>💬</span> Comentar la página</button>
+        ${page.type === 'doc' && !page.isTemplate && html`<button className="menu-item" onClick=${run(() => NC.saveAsTemplate(page.id))}><span>📋</span> Guardar como plantilla</button>`}
+        ${page.type === 'doc' && html`<button className="menu-item" onClick=${run(() => A.setUI({ templates: page.id }))}><span>📋</span> Aplicar plantilla…</button>`}`}
+      <div className="menu-sep"></div>
+      <button className="menu-item" onClick=${run(exportMd)}><span>⬇</span> Exportar a Markdown</button>
+      ${extended && html`<button className="menu-item" onClick=${run(() => setTimeout(NC.printPage, 100))}><span>🖨</span> Exportar a PDF / Imprimir<kbd>⌘P</kbd></button>`}
       <div className="menu-sep"></div>
       <button className="menu-item danger" onClick=${run(() => A.trashPage(page.id))}><span>🗑</span> Mover a la papelera</button>
-      ${extended && html`<div className="menu-foot">Editado ${NC.timeAgo(page.updatedAt)}<br />Creado ${new Date(page.createdAt).toLocaleString('es-ES')}</div>`}
+      ${extended && html`<div className="menu-foot">${wordCount(page)} palabras · Editado ${NC.timeAgo(page.updatedAt)}<br />Creado ${new Date(page.createdAt).toLocaleString('es-ES')}</div>`}
     <//>`;
   }
 
-  NC.pageToMarkdown = (s, page) => {
-    const out = ['# ' + pageTitle(page), ''];
-    if (page.type === 'database') out.push(NC.dbToMarkdown(s, page));
-    let num = {};
-    (page.blocks || []).forEach((b) => {
-      const pad = '  '.repeat(b.indent);
+  NC.blocksToMarkdown = (s, blocks, out = []) => {
+    const num = {};
+    (blocks || []).forEach((b) => {
+      const pad = '  '.repeat(b.indent || 0);
       const t = NC.htmlToMd(b.html || '');
       if (b.type !== 'numbered') num[b.indent] = 0;
       switch (b.type) {
@@ -59,13 +73,29 @@
         case 'quote': out.push('> ' + t); break;
         case 'callout': out.push(`> ${b.icon || '💡'} ${t}`); break;
         case 'code': out.push('```' + (b.lang || ''), b.text || '', '```'); break;
+        case 'equation': out.push('$$', b.text || '', '$$'); break;
         case 'divider': out.push('---'); break;
         case 'image': b.url && !b.url.startsWith('data:') && out.push(`![](${b.url})`); break;
+        case 'bookmark': case 'embed': b.url && out.push(`[${b.title || b.url}](${b.url})`); break;
+        case 'file': out.push(`📎 ${b.name || 'archivo'}`); break;
+        case 'button': out.push(`[${b.label || 'Botón'}]`); break;
+        case 'table': (b.rows || []).forEach((r, i) => {
+          out.push('| ' + r.map((c) => NC.htmlToMd(c).replace(/\|/g, '\\|').replace(/\n/g, ' ')).join(' | ') + ' |');
+          if (i === 0) out.push('| ' + r.map(() => '---').join(' | ') + ' |');
+        }); break;
+        case 'columns': case 'tabs': (b.cells || []).forEach((c) => { if (c.title) out.push('### ' + c.title); NC.blocksToMarkdown(s, c.blocks, out); }); break;
         case 'page': { const p = s.pages[b.pageId]; p && out.push(`[${pageTitle(p)}](${encodeURIComponent(pageTitle(p))}.md)`); break; }
+        case 'toc': case 'breadcrumb': break;
         default: out.push(pad + t);
       }
     });
-    return out.join('\n') + '\n';
+    return out.join('\n');
+  };
+
+  NC.pageToMarkdown = (s, page) => {
+    const out = ['# ' + pageTitle(page), ''];
+    if (page.type === 'database') out.push(NC.dbToMarkdown(s, page));
+    return out.join('\n') + '\n' + NC.blocksToMarkdown(s, page.blocks) + '\n';
   };
 
   /* ---------- Árbol de la barra lateral ---------- */
@@ -128,7 +158,8 @@
     const [newMenu, setNewMenu] = useState(null);
     const [wsMenu, setWsMenu] = useState(null);
     const fileRef = useRef(null);
-    const favs = Object.values(s.pages).filter((p) => p.favorite && !A.isInTrash(p.id));
+    const favs = Object.values(s.pages).filter((p) => p.favorite && !p.isTemplate && !A.isInTrash(p.id));
+    const due = NC.dueReminders ? NC.dueReminders().length : 0;
     const roots = s.rootIds.filter((id) => s.pages[id] && !s.pages[id].trashed);
     const startResize = (e) => {
       e.preventDefault();
@@ -152,6 +183,7 @@
       </div>
       <div className="side-nav">
         <button className="side-link" onClick=${() => A.setUI({ search: true })}><span>🔍</span> Buscar <kbd>⌘K</kbd></button>
+        <button className="side-link" onClick=${() => A.setUI({ inbox: true })}><span>📥</span> Bandeja de entrada ${due > 0 && html`<span className="badge">${due}</span>`}</button>
         <button className="side-link" onClick=${() => A.setUI({ settings: true })}><span>⚙️</span> Ajustes</button>
         <button className="side-link" onClick=${(e) => setNewMenu(e.currentTarget)}><span>✚</span> Nueva página</button>
       </div>
@@ -181,6 +213,7 @@
       <input type="file" accept=".md,.markdown,.txt" hidden ref=${fileRef} onChange=${importMd} />
       ${newMenu && html`<${NC.Popover} anchor=${newMenu} onClose=${() => setNewMenu(null)} className="menu">
         <button className="menu-item" onClick=${() => { setNewMenu(null); NC.navigate(A.createPage()); }}><span>📄</span> Documento</button>
+        <button className="menu-item" onClick=${() => { setNewMenu(null); const id = A.createPage(); NC.navigate(id); A.setUI({ templates: id }); }}><span>📋</span> Desde plantilla…</button>
         ${Object.entries(NC.VIEW_NAMES).map(([t, l]) => html`<button key=${t} className="menu-item"
           onClick=${() => { setNewMenu(null); NC.navigate(A.createPage({ type: 'database', layout: t, icon: null })); }}>
           <span>${{ table: '▦', board: '▥', calendar: '📅', gallery: '▤' }[t]}</span> Base de datos · ${l}</button>`)}
@@ -214,7 +247,9 @@
         <//>`)}
       </nav>
       <span className="grow"></span>
+      ${page.locked && html`<button className="icon-btn locked" title="Página bloqueada: clic para desbloquear" onClick=${() => A.updatePage(page.id, { locked: false })}>🔒 Bloqueada</button>`}
       <span className="muted small edited">Editado ${NC.timeAgo(page.updatedAt)}</span>
+      <button className="icon-btn" title="Comentarios de la página" onClick=${() => A.setUI({ pageComments: page.id })}>💬</button>
       <button className="icon-btn" title=${page.favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'} onClick=${() => A.updatePage(page.id, { favorite: !page.favorite })}>${page.favorite ? '★' : '☆'}</button>
       <button className="icon-btn" title="Más" onClick=${(e) => setMenu(e.currentTarget)}>···</button>
       ${menu && html`<${PageMenu} page=${page} anchor=${menu} onClose=${() => setMenu(null)} extended=${true} />`}
@@ -235,9 +270,53 @@
         if (page.type !== 'database') NC.firstBlockFns[page.id] && NC.firstBlockFns[page.id]();
       }
     };
-    return html`<h1 ref=${ref} className="page-title" contentEditable="plaintext-only" suppressContentEditableWarning
+    return html`<h1 ref=${ref} className="page-title" contentEditable=${page.locked ? 'false' : 'plaintext-only'} suppressContentEditableWarning
       data-placeholder="Sin título" onKeyDown=${onKeyDown}
       onInput=${(e) => { const t = e.currentTarget.textContent.replace(/\n/g, ''); if (!t) e.currentTarget.innerHTML = ''; A.updatePage(page.id, { title: t }); }} />`;
+  }
+
+  /* ---------- Portada: mover (reposicionar) y cambiar la altura ---------- */
+  function Cover({ page, style }) {
+    const [repos, setRepos] = useState(false);
+    const [menu, setMenu] = useState(null);
+    const ref = useRef(null);
+    const y = page.coverY == null ? 50 : page.coverY;
+    const drag = (e) => {
+      if (!repos) return;
+      e.preventDefault();
+      const h = ref.current.offsetHeight;
+      const y0 = e.clientY;
+      const start = y;
+      const move = (ev) => A.updatePage(page.id, { coverY: Math.max(0, Math.min(100, start - ((ev.clientY - y0) / h) * 100)) }, false);
+      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    };
+    const resize = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const y0 = e.clientY;
+      const h0 = ref.current.offsetHeight;
+      const move = (ev) => A.updatePage(page.id, { coverH: Math.round(Math.max(100, Math.min(640, h0 + ev.clientY - y0))) }, false);
+      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); A.updatePage(page.id, {}); };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    };
+    const css = { ...style, backgroundPosition: `center ${y}%` };
+    if (page.coverH) Object.assign(css, { height: page.coverH, maxHeight: 'none', minHeight: 0 });
+    return html`<div ref=${ref} className=${'cover' + (repos ? ' repositioning' : '')} style=${css} onMouseDown=${drag}>
+      ${repos && html`<div className="cover-hint">Arrastra la imagen para reposicionarla</div>`}
+      ${!page.locked && html`<div className="cover-actions">
+        ${repos
+          ? html`<button onClick=${() => { setRepos(false); A.updatePage(page.id, {}); }}>Guardar posición</button>`
+          : html`<button onClick=${(e) => setMenu(e.currentTarget)}>Cambiar portada</button>
+              <button onClick=${() => setRepos(true)}>Reposicionar</button>
+              <button onClick=${() => A.updatePage(page.id, { coverH: null, coverY: 50 })} title="Altura y posición originales">Restablecer</button>
+              <button onClick=${() => A.updatePage(page.id, { cover: null })}>Quitar</button>`}
+      </div>`}
+      ${!page.locked && html`<div className="cover-resize" title="Arrastra para cambiar la altura" onMouseDown=${resize}></div>`}
+      ${menu && html`<${CoverPicker} page=${page} anchor=${menu} onClose=${() => setMenu(null)} />`}
+    </div>`;
   }
 
   /* ---------- Vista de página ---------- */
@@ -245,39 +324,42 @@
     const s = NC.useStore();
     const page = s.pages[pageId];
     const [emoji, setEmoji] = useState(null);
-    const [coverMenu, setCoverMenu] = useState(null);
+    const [commentsOpen, setCommentsOpen] = useState(false);
     useEffect(() => {
       if (!page || peek) return;
       document.title = (page.icon ? page.icon + ' ' : '') + pageTitle(page) + ' · ' + APP_NAME;
       if (!page.title && page.type === 'doc') setTimeout(() => NC.focusTitleOf(page.id), 30);
     }, [pageId]);
+    useEffect(() => {
+      if (s.ui.pageComments === pageId) { setCommentsOpen(true); A.setUI({ pageComments: null }); setTimeout(() => { const t = document.querySelector('.page-comments textarea'); t && t.focus(); }, 50); }
+    }, [s.ui.pageComments]);
     if (!page) return html`<div className="empty-state">Esta página no existe.</div>`;
     const inTrash = A.isInTrash(page.id);
     const cover = NC.coverStyle(page.cover);
     const isDb = page.type === 'database';
-    return html`<div className=${'page font-' + (page.font || 'default') + (page.fullWidth || isDb ? ' full' : '')}>
+    const locked = !!page.locked;
+    return html`<div className=${'page font-' + (page.font || 'default') + (page.fullWidth || isDb ? ' full' : '') + (page.smallText ? ' small-text' : '') + (locked ? ' locked' : '')}>
       ${inTrash && html`<div className="trash-banner">Esta página está en la papelera.
         <button onClick=${() => A.restorePage(page.id)}>Restaurar</button>
         <button className="danger" onClick=${() => { if (confirm('¿Eliminar definitivamente esta página?')) A.deleteForever(page.id); }}>Eliminar definitivamente</button>
       </div>`}
-      ${cover && html`<div className="cover" style=${cover}>
-        <div className="cover-actions">
-          <button onClick=${(e) => setCoverMenu(e.currentTarget)}>Cambiar portada</button>
-          <button onClick=${() => A.updatePage(page.id, { cover: null })}>Quitar</button>
-        </div>
-      </div>`}
+      ${page.isTemplate && html`<div className="template-banner">📋 Estás editando una plantilla. Úsala desde «Nueva página → Desde plantilla…».</div>`}
+      ${cover && html`<${Cover} page=${page} style=${cover} />`}
       <div className=${'page-inner' + (cover ? ' has-cover' : '')}>
-        ${page.icon && html`<button className="page-icon" onClick=${(e) => setEmoji(e.currentTarget)}>${page.icon}</button>`}
-        <div className="page-controls">
+        ${page.icon && html`<button className="page-icon" onClick=${(e) => !locked && setEmoji(e.currentTarget)}>${page.icon}</button>`}
+        ${!locked && html`<div className="page-controls">
           ${!page.icon && html`<button onClick=${(e) => setEmoji(e.currentTarget)}>☺ Añadir icono</button>`}
           ${!cover && html`<button onClick=${() => A.updatePage(page.id, { cover: NC.COVERS[Math.floor(Math.random() * 8)] })}>🖼 Añadir portada</button>`}
-        </div>
+          ${!(page.comments || []).length && html`<button onClick=${() => setCommentsOpen(true)}>💬 Añadir comentario</button>`}
+        </div>`}
         <${Title} key=${'title-' + page.id} page=${page} />
+        <${NC.Backlinks} page=${page} />
+        <${NC.PageComments} page=${page} open=${commentsOpen} setOpen=${setCommentsOpen} />
         ${page.rowOf && html`<${NC.RowProps} row=${page} />`}
-        ${isDb ? html`<${NC.DatabaseView} page=${page} />` : html`<${NC.Editor} key=${'editor-' + page.id} page=${page} />`}
+        ${isDb ? html`<${NC.DatabaseView} page=${page} />` : html`<${NC.Editor} key=${'editor-' + page.id} page=${page} readOnly=${locked} />`}
+        ${!isDb && !locked && html`<${NC.EmptyPageStarter} page=${page} />`}
       </div>
       ${emoji && html`<${NC.EmojiPicker} anchor=${emoji} onClose=${() => setEmoji(null)} onPick=${(e) => { A.updatePage(page.id, { icon: e }); setEmoji(null); }} />`}
-      ${coverMenu && html`<${CoverPicker} page=${page} anchor=${coverMenu} onClose=${() => setCoverMenu(null)} />`}
     </div>`;
   }
 
@@ -328,17 +410,17 @@
     const close = () => A.setUI({ search: false });
     const nq = q.trim().toLowerCase();
     const results = Object.values(s.pages)
-      .filter((p) => !A.isInTrash(p.id))
+      .filter((p) => !p.isTemplate && !A.isInTrash(p.id))
       .map((p) => {
         if (!nq) return { p, snippet: '' };
         if (pageTitle(p).toLowerCase().includes(nq)) return { p, snippet: '' };
-        const b = (p.blocks || []).find((b) => NC.htmlToText(b.html || b.text || '').toLowerCase().includes(nq));
-        return b ? { p, snippet: NC.htmlToText(b.html || b.text) } : null;
+        const b = NC.allBlocks(p).find((b) => NC.htmlToText(b.html || b.text || (b.rows ? b.rows.flat().join(' ') : '')).toLowerCase().includes(nq));
+        return b ? { p, snippet: NC.htmlToText(b.html || b.text || b.rows.flat().join(' ')), blockId: b.id } : null;
       })
       .filter(Boolean)
       .sort((a, b) => b.p.updatedAt - a.p.updatedAt)
       .slice(0, 30);
-    const open = (r) => { close(); NC.navigate(r.p.id); };
+    const open = (r) => { close(); NC.navigate(r.p.id + (r.blockId ? '?b=' + r.blockId : '')); };
     const pathOf = (p) => {
       const parts = [];
       let cur = s.pages[p.rowOf || p.parentId];
@@ -393,7 +475,7 @@
 
   /* ---------- Cuenta y sincronización ---------- */
   const SYNC_LABELS = {
-    off: 'Sincronización no configurada', signedout: 'Sin iniciar sesión', connecting: 'Conectando…',
+    off: 'Sincronización no configurada', starting: 'Cargando…', signedout: 'Sin iniciar sesión', connecting: 'Conectando…',
     syncing: 'Sincronizando…', synced: 'Sincronizado', offline: 'Sin conexión · se sincronizará al volver', error: 'Error de sincronización',
   };
 
@@ -487,8 +569,17 @@
   }
 
   /* ---------- App ---------- */
+  function BlockCommentFromToolbar({ c }) {
+    const s = NC.getState();
+    const pid = [s.ui.peek, s.ui.current].find((id) => id && NC.locateBlock(id, c.blockId));
+    const r = pid && NC.locateBlock(pid, c.blockId);
+    if (!r) return null;
+    return html`<${NC.CommentThread} pageId=${pid} block=${r.block} anchor=${c.anchor} quote=${c.quote} onClose=${() => A.setUI({ comment: null })} />`;
+  }
+
   function App() {
     const s = NC.useStore();
+    const sync = NC.useSync();
     const cur = s.ui.current && s.pages[s.ui.current];
 
     useEffect(() => {
@@ -505,18 +596,30 @@
     useEffect(() => {
       const key = (e) => {
         const mod = e.metaKey || e.ctrlKey;
-        if (mod && (e.key === 'k' || e.key === 'p')) { e.preventDefault(); A.setUI({ search: !NC.getState().ui.search }); }
-        if (mod && e.key === '\\') { e.preventDefault(); A.setSettings({ sidebarCollapsed: !NC.getState().settings.sidebarCollapsed }); }
+        const st = NC.getState();
+        if (mod && !e.shiftKey && (e.key === 'k' || e.key === 'p')) {
+          if (e.key === 'k' && e.target.closest && e.target.closest('.rt[contenteditable="true"]') && !window.getSelection().isCollapsed) return;
+          e.preventDefault();
+          A.setUI({ search: !st.ui.search });
+        }
+        if (mod && e.key === '\\') { e.preventDefault(); A.setSettings({ sidebarCollapsed: !st.settings.sidebarCollapsed }); }
+        if (mod && e.key === 'f' && st.ui.current) { e.preventDefault(); A.setUI({ find: true }); }
+        if (mod && e.shiftKey && e.key.toLowerCase() === 'l') { e.preventDefault(); A.setSettings({ theme: document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark' }); }
       };
       document.addEventListener('keydown', key);
       return () => document.removeEventListener('keydown', key);
     }, []);
 
+    // Pantalla de inicio de sesión cuando la sincronización está configurada
+    if (NC.sync.enabled && !sync.user && !NC.isLocalMode()) return html`<${NC.LoginScreen} />`;
+
     return html`<div className=${'app' + (s.settings.sidebarCollapsed ? ' collapsed' : '')}>
       ${!s.settings.sidebarCollapsed && html`<${Sidebar} />`}
       <main className="main">
         ${cur
-          ? html`<${Topbar} page=${cur} /><div className="main-scroll"><${PageView} key=${cur.id} pageId=${cur.id} /></div>`
+          ? html`<${Topbar} page=${cur} />
+              ${s.ui.find && html`<${NC.FindBar} pageId=${cur.id} onClose=${() => A.setUI({ find: false })} />`}
+              <div className="main-scroll"><${PageView} key=${cur.id} pageId=${cur.id} /></div>`
           : html`<div className="empty-state">
               ${s.settings.sidebarCollapsed && html`<button className="icon-btn" onClick=${() => A.setSettings({ sidebarCollapsed: false })}>☰</button>`}
               <div className="big">📄</div><p>No hay ninguna página abierta.</p>
@@ -527,6 +630,10 @@
       ${s.ui.search && html`<${Search} />`}
       ${s.ui.trash && html`<${Trash} />`}
       ${s.ui.settings && html`<${Settings} />`}
+      ${s.ui.inbox && html`<${NC.Inbox} />`}
+      ${s.ui.history && html`<${NC.VersionHistory} pageId=${s.ui.history} onClose=${() => A.setUI({ history: null })} />`}
+      ${s.ui.templates && html`<${NC.TemplatePicker} pageId=${s.ui.templates} onClose=${() => A.setUI({ templates: null })} />`}
+      ${s.ui.comment && html`<${BlockCommentFromToolbar} c=${s.ui.comment} />`}
       <${NC.FormatToolbar} />
     </div>`;
   }

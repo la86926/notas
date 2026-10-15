@@ -32,9 +32,10 @@
 
   function sanitizeState(s) {
     Object.values(s.pages).forEach((p) => {
-      (p.blocks || []).forEach((b) => {
+      NC.walkBlocks(p.blocks || [], (b) => {
         b.html = NC.sanitize(b.html || '');
-        if (b.url && !/^(https?:|data:image\/)/.test(b.url)) b.url = '';
+        if (b.url && !/^(https?:|data:(image|application|audio|video)\/|data:text\/plain)/.test(b.url)) b.url = '';
+        if (Array.isArray(b.rows)) b.rows = b.rows.map((row) => (Array.isArray(row) ? row.map((c) => NC.sanitize(String(c || ''))) : []));
       });
       if (p.cover && !NC.coverStyle(p.cover)) p.cover = null;
     });
@@ -260,26 +261,64 @@
     return id;
   };
 
-  /* ---------- Bloques ---------- */
-  const findBlock = (pageId, blockId) => {
+  /* ---------- Bloques ----------
+   * Los bloques son una lista plana con sangría. Los bloques contenedor ("columns", "tabs")
+   * tienen cells: [{ id, title?, width?, blocks: [...] }] y cada celda tiene al menos un bloque. */
+  const CONTAINERS = ['columns', 'tabs', 'synced'];
+  NC.CONTAINERS = CONTAINERS;
+
+  // Recorre todos los bloques (incluidos los anidados)
+  NC.walkBlocks = (blocks, fn, parent = null) => {
+    (blocks || []).forEach((b) => {
+      fn(b, parent);
+      (b.cells || []).forEach((c) => NC.walkBlocks(c.blocks, fn, { block: b, cell: c }));
+    });
+  };
+  NC.allBlocks = (page) => {
+    const out = [];
+    NC.walkBlocks(page && page.blocks, (b) => out.push(b));
+    return out;
+  };
+
+  // Localiza un bloque: { arr, index, block, cell, owner, ownerArr }
+  const locateIn = (arr, id, cell = null, owner = null, ownerArr = null) => {
+    for (let i = 0; i < arr.length; i++) {
+      const b = arr[i];
+      if (b.id === id) return { arr, index: i, block: b, cell, owner, ownerArr };
+      for (const c of b.cells || []) {
+        const r = locateIn(c.blocks, id, c, b, arr);
+        if (r) return r;
+      }
+    }
+    return null;
+  };
+  const locate = (pageId, blockId) => {
     const p = state.pages[pageId];
-    const i = p.blocks.findIndex((b) => b.id === blockId);
-    return [p, i, p.blocks[i]];
+    return p ? locateIn(p.blocks, blockId) : null;
+  };
+  NC.locateBlock = locate;
+
+  const touch = (pageId) => {
+    if (state.pages[pageId]) state.pages[pageId].updatedAt = now();
   };
 
   A.updateBlock = (pageId, blockId, patch, persist = true) => {
-    const [p, , b] = findBlock(pageId, blockId);
-    if (!b) return;
-    Object.assign(b, patch);
-    p.updatedAt = now();
+    const r = locate(pageId, blockId);
+    if (!r) return;
+    Object.assign(r.block, patch);
+    touch(pageId);
     emit(persist);
   };
 
   A.insertBlocks = (pageId, afterId, blocks) => {
     const p = state.pages[pageId];
-    const i = afterId == null ? -1 : p.blocks.findIndex((b) => b.id === afterId);
-    p.blocks.splice(i + 1, 0, ...blocks);
-    p.updatedAt = now();
+    if (afterId == null) p.blocks.splice(0, 0, ...blocks);
+    else {
+      const r = locate(pageId, afterId);
+      if (!r) p.blocks.push(...blocks);
+      else r.arr.splice(r.index + 1, 0, ...blocks);
+    }
+    touch(pageId);
     emit();
     return blocks[0] && blocks[0].id;
   };
@@ -290,18 +329,57 @@
     return b.id;
   };
 
+  // Tras sacar bloques de una celda: elimina columnas vacías y deshace columnas de una sola celda
+  const cleanupContainer = (r) => {
+    if (!r.cell || r.arr.length) return;
+    const owner = r.owner;
+    if (owner.type === 'columns') {
+      owner.cells = owner.cells.filter((c) => c.blocks.length);
+      if (owner.cells.length === 1) {
+        const i = r.ownerArr.indexOf(owner);
+        r.ownerArr.splice(i, 1, ...owner.cells[0].blocks);
+      } else if (!owner.cells.length) r.ownerArr.splice(r.ownerArr.indexOf(owner), 1);
+    } else r.arr.push(blk('paragraph'));
+  };
+
   A.removeBlock = (pageId, blockId) => {
     const p = state.pages[pageId];
-    p.blocks = p.blocks.filter((b) => b.id !== blockId);
+    const r = locate(pageId, blockId);
+    if (!r) return;
+    r.arr.splice(r.index, 1);
+    if (r.cell && !r.arr.length) r.arr.push(blk('paragraph'));
     if (!p.blocks.length) p.blocks.push(blk('paragraph'));
-    p.updatedAt = now();
+    touch(pageId);
     emit();
   };
 
+  A.removeBlocks = (pageId, ids) => {
+    ids.forEach((id) => {
+      const r = locate(pageId, id);
+      if (r) r.arr.splice(r.index, 1), r.cell && !r.arr.length && r.arr.push(blk('paragraph'));
+    });
+    const p = state.pages[pageId];
+    if (!p.blocks.length) p.blocks.push(blk('paragraph'));
+    touch(pageId);
+    emit();
+  };
+
+  const cloneBlock = (b) => {
+    const c = JSON.parse(JSON.stringify(b));
+    NC.walkBlocks([c], (x) => (x.id = NC.uid()));
+    (c.cells || []).forEach((cell) => (cell.id = NC.uid()));
+    NC.walkBlocks([c], (x) => (x.cells || []).forEach((cell) => (cell.id = NC.uid())));
+    return c;
+  };
+  NC.cloneBlock = cloneBlock;
+
   A.duplicateBlock = (pageId, blockId) => {
-    const [, , b] = findBlock(pageId, blockId);
-    const copy = { ...JSON.parse(JSON.stringify(b)), id: NC.uid() };
-    A.insertBlocks(pageId, blockId, [copy]);
+    const r = locate(pageId, blockId);
+    if (!r) return null;
+    const copy = cloneBlock(r.block);
+    r.arr.splice(r.index + 1, 0, copy);
+    touch(pageId);
+    emit();
     return copy.id;
   };
 
@@ -313,38 +391,82 @@
   };
   NC.subtreeRange = subtreeRange;
 
+  const takeSubtree = (pageId, blockId, targetId) => {
+    const r = locate(pageId, blockId);
+    if (!r || blockId === targetId) return null;
+    const [s, e] = subtreeRange(r.arr, r.index);
+    const moving = r.arr.slice(s, e);
+    // no se puede mover un bloque dentro de sí mismo
+    let inside = false;
+    NC.walkBlocks(moving, (x) => { if (x.id === targetId) inside = true; });
+    if (inside) return null;
+    r.arr.splice(s, e - s);
+    cleanupContainer(r);
+    return moving;
+  };
+
   A.moveBlock = (pageId, blockId, targetId, position) => {
-    const p = state.pages[pageId];
-    const i = p.blocks.findIndex((b) => b.id === blockId);
-    if (i < 0 || blockId === targetId) return;
-    const [s, e] = subtreeRange(p.blocks, i);
-    const moving = p.blocks.slice(s, e);
-    if (moving.some((b) => b.id === targetId)) return;
-    p.blocks.splice(s, e - s);
-    let ti = p.blocks.findIndex((b) => b.id === targetId);
-    const target = p.blocks[ti];
-    if (position === 'after') ti = subtreeRange(p.blocks, ti)[1];
-    const delta = target.indent - moving[0].indent;
+    const moving = takeSubtree(pageId, blockId, targetId);
+    if (!moving) return;
+    const t = locate(pageId, targetId);
+    let ti = t.index;
+    if (position === 'after') ti = subtreeRange(t.arr, ti)[1];
+    const delta = t.block.indent - moving[0].indent;
     moving.forEach((b) => (b.indent = Math.max(0, b.indent + delta)));
-    p.blocks.splice(ti, 0, ...moving);
-    p.updatedAt = now();
+    t.arr.splice(ti, 0, ...moving);
+    touch(pageId);
+    emit();
+  };
+
+  // Soltar un bloque a la izquierda/derecha de otro crea (o amplía) columnas, como en Notion
+  A.dropBeside = (pageId, blockId, targetId, side) => {
+    const moving = takeSubtree(pageId, blockId, targetId);
+    if (!moving) return;
+    moving.forEach((b, i) => (b.indent = i === 0 ? 0 : Math.max(1, b.indent - moving[0].indent)));
+    const t = locate(pageId, targetId);
+    const newCell = { id: NC.uid(), blocks: moving, width: 1 };
+    if (t.owner && t.owner.type === 'columns') {
+      const ci = t.owner.cells.indexOf(t.cell);
+      t.owner.cells.splice(side === 'left' ? ci : ci + 1, 0, newCell);
+      t.owner.cells.forEach((c) => (c.width = 1));
+    } else {
+      const [s, e] = subtreeRange(t.arr, t.index);
+      const targetBlocks = t.arr.slice(s, e);
+      const base = targetBlocks[0].indent;
+      targetBlocks.forEach((b) => (b.indent -= base));
+      const cols = blk('columns', '', { indent: base, cells: [] });
+      const oldCell = { id: NC.uid(), blocks: targetBlocks, width: 1 };
+      cols.cells = side === 'left' ? [newCell, oldCell] : [oldCell, newCell];
+      t.arr.splice(s, e - s, cols);
+    }
+    touch(pageId);
     emit();
   };
 
   A.shiftBlock = (pageId, blockId, dir) => {
-    const p = state.pages[pageId];
-    const i = p.blocks.findIndex((b) => b.id === blockId);
-    const [s, e] = subtreeRange(p.blocks, i);
+    const r = locate(pageId, blockId);
+    if (!r) return;
+    const arr = r.arr;
+    const [s, e] = subtreeRange(arr, r.index);
     if (dir < 0) {
       let k = s - 1;
-      while (k > 0 && p.blocks[k].indent > p.blocks[s].indent) k--;
+      while (k > 0 && arr[k].indent > arr[s].indent) k--;
       if (k < 0) return;
-      A.moveBlock(pageId, blockId, p.blocks[k].id, 'before');
+      A.moveBlock(pageId, blockId, arr[k].id, 'before');
     } else {
-      if (e >= p.blocks.length) return;
-      A.moveBlock(pageId, blockId, p.blocks[e].id, 'after');
+      if (e >= arr.length) return;
+      A.moveBlock(pageId, blockId, arr[e].id, 'after');
     }
   };
+
+  // Crea un bloque contenedor con N celdas
+  NC.newContainer = (type, n, extra = {}) =>
+    blk(type, '', {
+      cells: Array.from({ length: n }, (_, i) => ({ id: NC.uid(), title: type === 'tabs' ? `Pestaña ${i + 1}` : undefined, width: 1, blocks: [blk('paragraph')] })),
+      active: 0,
+      ...extra,
+    });
+  NC.newBlock = blk;
 
   /* ---------- Base de datos ---------- */
   const dbOf = (dbId) => state.pages[dbId].db;
@@ -517,7 +639,7 @@
     else syncHash();
   };
   function syncHash() {
-    const id = location.hash.replace(/^#\/?/, '');
+    const id = location.hash.replace(/^#\/?/, '').split('?')[0];
     state.ui.current = id && state.pages[id] ? id : null;
     state.ui.peek = null;
     emit(false);
@@ -579,6 +701,13 @@
       blk('todo', 'Arrastra el asa <b>⋮⋮</b> a la izquierda de un bloque para reordenarlo'),
       blk('todo', 'Pulsa <code>Tab</code> / <code>Shift+Tab</code> para anidar bloques'),
       blk('todo', 'Abre la base de datos <b>Tareas</b> y prueba las vistas Tablero, Calendario y Galería'),
+      blk('h2', 'Novedades'),
+      blk('bulleted', '<b>Columnas</b>: arrastra un bloque al lado de otro, o escribe <code>/2 columnas</code>'),
+      blk('bulleted', '<b>Menciones y recordatorios</b>: escribe <code>@</code> para enlazar una página o poner una fecha con aviso'),
+      blk('bulleted', '<b>Pestañas, tablas, índice, ecuaciones, botones, embeds de YouTube/Figma/Google Docs</b> en el menú <code>/</code>'),
+      blk('bulleted', '<b>Selección múltiple</b>: pulsa <code>Esc</code> o arrastra desde el margen; luego borra, duplica o mueve'),
+      blk('bulleted', '<b>⌘Z / ⌘⇧Z</b> deshacer y rehacer · <b>⌘F</b> buscar y reemplazar · <b>Historial de versiones</b> en el menú ···'),
+      blk('bulleted', '<b>Comentarios</b>, <b>plantillas</b>, <b>bloquear página</b>, <b>exportar a PDF</b> y portada que puedes mover y redimensionar'),
       blk('h2', 'Atajos de Markdown'),
       blk('bulleted', '<code>#</code>, <code>##</code>, <code>###</code> + espacio → encabezados'),
       blk('bulleted', '<code>-</code> o <code>*</code> + espacio → lista con viñetas'),
@@ -615,7 +744,7 @@
     save();
   }
   NC.initRoute = () => {
-    const id = location.hash.replace(/^#\/?/, '');
+    const id = location.hash.replace(/^#\/?/, '').split('?')[0];
     if (id && state.pages[id]) state.ui.current = id;
     else {
       const cur = state.ui.current && state.pages[state.ui.current] ? state.ui.current : state.rootIds.find((r) => !state.pages[r].trashed);

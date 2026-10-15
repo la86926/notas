@@ -7,6 +7,17 @@ Tu espacio de notas tipo Notion, en dos versiones que se sincronizan entre sí:
 
 Inicias sesión con tu cuenta de Google y tus cambios se sincronizan en la nube (Firebase). Sin sesión, todo funciona igual, pero las notas se quedan solo en el dispositivo.
 
+## Funciones
+
+- **Editor por bloques**: texto, encabezados (también desplegables), tareas, viñetas, listas numeradas, desplegables, citas, destacados, código, divisores, tablas simples, ecuaciones LaTeX, imágenes, archivos, marcadores web, embeds (YouTube, Vimeo, Spotify, Figma, Loom, CodePen, Google Docs/Sheets/Slides/Maps), índice, ruta de navegación y botones.
+- **Diseño**: columnas (arrastra un bloque al lado de otro o usa `/2 columnas`) y pestañas.
+- **Menú `/`**, **@menciones** de páginas y fechas, **recordatorios** con bandeja de entrada y atajos Markdown.
+- **Selección múltiple** (Esc, Shift+↑/↓, arrastrar desde el margen), **⌘Z/⌘⇧Z** deshacer y rehacer, **⌘F** buscar y reemplazar, **historial de versiones**.
+- **Comentarios** en bloques, en texto seleccionado y en la página. **Enlaces inversos**.
+- **Plantillas** (incluidas y propias), **bloquear página**, texto pequeño, ancho completo, tipografías, **exportar a PDF/Markdown**.
+- **Portada** que se puede mover y redimensionar, iconos y modo oscuro.
+- **Bases de datos** con vistas Tabla, Tablero, Calendario y Galería.
+
 ## Instalar en un Mac
 
 1. Abre `Notas-de-L.dmg` y arrastra **Notas de L** a **Aplicaciones**.
@@ -70,10 +81,13 @@ css/styles.css        estilos, tema claro y oscuro
 js/config.js          configuración (Firebase, cuentas permitidas, cliente OAuth del Mac)
 js/sync.js            sincronización: Firebase Auth (Google) + Firestore
 js/store.js           estado y persistencia local
-js/editor.js          editor por bloques, menú "/" y barra de formato
+js/editor.js          editor por bloques, columnas, pestañas, menú "/", @menciones, selección
+js/blocks.js          tabla, índice, ecuación, embed, marcador, archivo, botón
+js/extras.js          login, comentarios, enlaces inversos, recordatorios, plantillas, buscar
+js/history.js         deshacer/rehacer e historial de versiones
 js/database.js        bases de datos: tabla, tablero, calendario y galería
 js/app.js             barra lateral, páginas, búsqueda, papelera, ajustes y cuenta
-vendor/               React 18.3.1, htm 3.1.1 y Firebase 10.12.2 (compat)
+vendor/               React 18.3.1, htm 3.1.1, KaTeX 0.16.11 y Firebase 10.12.2 (compat)
 mac/NotasDeL/main.swift   app nativa (WKWebView + login de Google + Llavero)
 mac/build.sh          compila la app universal y genera dist/Notas-de-L.dmg
 firestore.rules       reglas de seguridad de la base de datos

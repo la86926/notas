@@ -235,6 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         case "googleSignIn": auth.signIn(clientId: clientId, completion: reply)
         case "googleSilent": auth.silent(clientId: clientId, completion: reply)
         case "googleSignOut": Keychain.delete()
+        case "print": printPage()
         default: break
         }
     }
@@ -277,6 +278,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         panel.beginSheetModal(for: window) { r in completionHandler(r == .OK ? panel.urls : nil) }
     }
 
+    // Imprimir / exportar a PDF (el diálogo de macOS permite "Guardar como PDF")
+    func printPage() {
+        let info = NSPrintInfo.shared
+        info.horizontalPagination = .fit
+        info.verticalPagination = .automatic
+        info.topMargin = 36; info.bottomMargin = 36; info.leftMargin = 36; info.rightMargin = 36
+        let op = webView.printOperation(with: info)
+        op.view?.frame = webView.bounds
+        op.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+    }
+
+    // prompt()
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+        let a = NSAlert()
+        a.messageText = prompt
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        field.stringValue = defaultText ?? ""
+        a.accessoryView = field
+        a.addButton(withTitle: "Aceptar")
+        a.addButton(withTitle: "Cancelar")
+        a.window.initialFirstResponder = field
+        a.beginSheetModal(for: window) { r in completionHandler(r == .alertFirstButtonReturn ? field.stringValue : nil) }
+    }
+
     // alert / confirm
     func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo,
                  completionHandler: @escaping () -> Void) {
@@ -314,9 +340,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
                       mi("Ocultar \(appName)", #selector(NSApplication.hide(_:)), "h"),
                       mi("Ocultar otras", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]), .separator(),
                       mi("Salir de \(appName)", #selector(NSApplication.terminate(_:)), "q")])
-        add("Edición", [mi("Deshacer", Selector(("undo:")), "z"), mi("Rehacer", Selector(("redo:")), "z", [.command, .shift]), .separator(),
+        // ⌘Z / ⌘⇧Z los gestiona la app web (deshacer por bloques); el menú solo los invoca
+        add("Edición", [mi("Deshacer", #selector(jsUndo), ""), mi("Rehacer", #selector(jsRedo), ""), .separator(),
                         mi("Cortar", #selector(NSText.cut(_:)), "x"), mi("Copiar", #selector(NSText.copy(_:)), "c"),
                         mi("Pegar", #selector(NSText.paste(_:)), "v"), mi("Seleccionar todo", #selector(NSText.selectAll(_:)), "a")])
+        add("Archivo", [mi("Exportar a PDF / Imprimir…", #selector(printMenu), "p", [.command, .shift])])
         add("Visualización", [mi("Recargar", #selector(reload), "r"),
                               mi("Pantalla completa", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control])])
         add("Ventana", [mi("Minimizar", #selector(NSWindow.performMiniaturize(_:)), "m"), mi("Zoom", #selector(NSWindow.performZoom(_:)), "")])
@@ -324,6 +352,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
     }
 
     @objc func reload() { webView.reload() }
+    @objc func jsUndo() { webView.evaluateJavaScript("NC.history && NC.history.undo()") }
+    @objc func jsRedo() { webView.evaluateJavaScript("NC.history && NC.history.redo()") }
+    @objc func printMenu() { printPage() }
 
     // Autoprueba para desarrollo: NOTAS_SELFTEST=1 imprime el estado de la página y cierra la app.
     let selfTest = ProcessInfo.processInfo.environment["NOTAS_SELFTEST"] != nil
