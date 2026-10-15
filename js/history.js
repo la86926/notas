@@ -139,7 +139,7 @@
     return html`<${NC.Modal} onClose=${onClose} className="history-modal">
       <div className="history">
         <div className="history-preview">
-          ${preview ? html`<h1>${preview.icon || ''} ${preview.title || 'Sin título'}</h1>
+          ${preview ? html`<h1>${NC.iconText(preview.icon, '')} ${preview.title || 'Sin título'}</h1>
             ${(preview.blocks || []).map((b, i) => html`<div key=${i} className=${'hp-' + b.type} style=${{ paddingLeft: (b.indent || 0) * 20 }}>
               ${b.type === 'todo' ? (b.checked ? '☑ ' : '☐ ') : b.type === 'bulleted' ? '• ' : ''}${NC.htmlToText(b.html || b.text || '') || (b.type === 'divider' ? '———' : '')}</div>`)}`
             : html`<div className="muted pad">${list ? 'Aún no hay versiones guardadas.' : 'Cargando…'}</div>`}

@@ -6,7 +6,7 @@
   const { useState, useRef, useEffect, useLayoutEffect } = React;
 
   const APP_NAME = (window.NOTAS_CONFIG && window.NOTAS_CONFIG.appName) || 'Notas de L';
-  const pageIcon = (p) => p.icon || (p.type === 'database' ? '🗃️' : '📄');
+  const pageIcon = (p) => html`<${NC.Icon} icon=${p.icon} fallback=${p.type === 'database' ? '🗃️' : '📄'} />`;
   const pageTitle = (p) => p.title || 'Sin título';
 
   /* ---------- Menú de página (compartido por barra lateral y cabecera) ---------- */
@@ -17,7 +17,9 @@
   };
 
   function PageMenu({ page, anchor, onClose, extended = false }) {
+    const [moving, setMoving] = useState(false);
     const run = (fn) => () => { fn(); onClose(); };
+    if (moving) return html`<${MovePicker} page=${page} anchor=${anchor} onClose=${onClose} />`;
     const exportMd = () => {
       const s = NC.getState();
       const md = NC.pageToMarkdown(s, page);
@@ -41,6 +43,7 @@
       <button className="menu-item" onClick=${run(() => A.updatePage(page.id, { favorite: !page.favorite }))}>
         <span>${page.favorite ? '★' : '☆'}</span> ${page.favorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}</button>
       <button className="menu-item" onClick=${run(() => NC.navigate(A.duplicatePage(page.id)))}><span>⧉</span> Duplicar</button>
+      ${!page.rowOf && html`<button className="menu-item" onClick=${() => setMoving(true)}><span>↪</span> Mover a…</button>`}
       <button className="menu-item" onClick=${run(() => { navigator.clipboard && navigator.clipboard.writeText(location.href.split('#')[0] + '#/' + page.id); NC.toast('Enlace copiado'); })}><span>🔗</span> Copiar enlace</button>
       ${extended && html`
         <button className="menu-item" onClick=${run(() => A.setUI({ find: true }))}><span>🔍</span> Buscar en la página<kbd>⌘F</kbd></button>
@@ -54,6 +57,30 @@
       <div className="menu-sep"></div>
       <button className="menu-item danger" onClick=${run(() => A.trashPage(page.id))}><span>🗑</span> Mover a la papelera</button>
       ${extended && html`<div className="menu-foot">${wordCount(page)} palabras · Editado ${NC.timeAgo(page.updatedAt)}<br />Creado ${new Date(page.createdAt).toLocaleString('es-ES')}</div>`}
+    <//>`;
+  }
+
+  function MovePicker({ page, anchor, onClose }) {
+    const s = NC.useStore();
+    const [q, setQ] = useState('');
+    const banned = new Set();
+    const walk = (id) => { banned.add(id); (s.pages[id] ? s.pages[id].children : []).forEach(walk); };
+    walk(page.id);
+    const n = NC.normalizeStr(q);
+    const targets = Object.values(s.pages)
+      .filter((p) => p.type === 'doc' && !p.rowOf && !p.isTemplate && !banned.has(p.id) && !A.isInTrash(p.id) && (!n || NC.normalizeStr(pageTitle(p)).includes(n)))
+      .sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 30);
+    const move = (to) => {
+      const list = to ? s.pages[to].children : s.rootIds;
+      A.movePage(page.id, to, list.length);
+      NC.toast('Página movida');
+      onClose();
+    };
+    return html`<${NC.Popover} anchor=${anchor} onClose=${onClose} className="menu move-picker" align="right">
+      <input className="menu-input" autoFocus placeholder="Mover la página a…" value=${q} onInput=${(e) => setQ(e.target.value)} />
+      <button className="menu-item" onClick=${() => move(null)}><span>🔒</span> Privado (nivel superior)</button>
+      <div className="menu-label">Páginas</div>
+      ${targets.map((p) => html`<button key=${p.id} className="menu-item" onClick=${() => move(p.id)}><span>${pageIcon(p)}</span> ${pageTitle(p)}</button>`)}
     <//>`;
   }
 
@@ -176,7 +203,7 @@
     };
     return html`<aside className="sidebar" style=${{ width: s.settings.sidebarWidth }}>
       <div className="ws-header" onClick=${(e) => setWsMenu(e.currentTarget)}>
-        <span className="ws-avatar">${APP_NAME.slice(-1)}</span>
+        <img className="ws-avatar" src="assets/icon.png" alt="" />
         <span className="ws-name">${APP_NAME}</span>
         <span className="chev">⌄</span>
         <button className="collapse-btn" title="Ocultar barra lateral (⌘\\)" onClick=${(e) => { e.stopPropagation(); A.setSettings({ sidebarCollapsed: true }); }}>«</button>
@@ -302,10 +329,12 @@
       document.addEventListener('mousemove', move);
       document.addEventListener('mouseup', up);
     };
-    const css = { ...style, backgroundPosition: `center ${y}%` };
+    const resolved = NC.useAsset(page.cover);
+    const css = { ...(NC.coverStyle(resolved) || style), backgroundPosition: `center ${y}%` };
     if (page.coverH) Object.assign(css, { height: page.coverH, maxHeight: 'none', minHeight: 0 });
     return html`<div ref=${ref} className=${'cover' + (repos ? ' repositioning' : '')} style=${css} onMouseDown=${drag}>
       ${repos && html`<div className="cover-hint">Arrastra la imagen para reposicionarla</div>`}
+      ${page.coverCredit && !repos && html`<a className="cover-credit" href=${page.coverCredit.url} target="_blank" rel="noopener noreferrer">Foto de ${page.coverCredit.name}${/unsplash/.test(page.coverCredit.url) ? ' en Unsplash' : ''}</a>`}
       ${!page.locked && html`<div className="cover-actions">
         ${repos
           ? html`<button onClick=${() => { setRepos(false); A.updatePage(page.id, {}); }}>Guardar posición</button>`
@@ -315,7 +344,7 @@
               <button onClick=${() => A.updatePage(page.id, { cover: null })}>Quitar</button>`}
       </div>`}
       ${!page.locked && html`<div className="cover-resize" title="Arrastra para cambiar la altura" onMouseDown=${resize}></div>`}
-      ${menu && html`<${CoverPicker} page=${page} anchor=${menu} onClose=${() => setMenu(null)} />`}
+      ${menu && html`<${NC.CoverPicker} page=${page} anchor=${menu} onClose=${() => setMenu(null)} />`}
     </div>`;
   }
 
@@ -327,7 +356,7 @@
     const [commentsOpen, setCommentsOpen] = useState(false);
     useEffect(() => {
       if (!page || peek) return;
-      document.title = (page.icon ? page.icon + ' ' : '') + pageTitle(page) + ' · ' + APP_NAME;
+      document.title = (page.icon && !NC.isImageRef(page.icon) ? page.icon + ' ' : '') + pageTitle(page) + ' · ' + APP_NAME;
       if (!page.title && page.type === 'doc') setTimeout(() => NC.focusTitleOf(page.id), 30);
     }, [pageId]);
     useEffect(() => {
@@ -346,10 +375,10 @@
       ${page.isTemplate && html`<div className="template-banner">📋 Estás editando una plantilla. Úsala desde «Nueva página → Desde plantilla…».</div>`}
       ${cover && html`<${Cover} page=${page} style=${cover} />`}
       <div className=${'page-inner' + (cover ? ' has-cover' : '')}>
-        ${page.icon && html`<button className="page-icon" onClick=${(e) => !locked && setEmoji(e.currentTarget)}>${page.icon}</button>`}
+        ${page.icon && html`<button className=${'page-icon' + (NC.isImageRef(page.icon) ? ' is-img' : '')} onClick=${(e) => !locked && setEmoji(e.currentTarget)}><${NC.Icon} icon=${page.icon} /></button>`}
         ${!locked && html`<div className="page-controls">
           ${!page.icon && html`<button onClick=${(e) => setEmoji(e.currentTarget)}>☺ Añadir icono</button>`}
-          ${!cover && html`<button onClick=${() => A.updatePage(page.id, { cover: NC.COVERS[Math.floor(Math.random() * 8)] })}>🖼 Añadir portada</button>`}
+          ${!cover && html`<button onClick=${() => { const c = NC.randomCover(); A.updatePage(page.id, { cover: c.url, coverCredit: c.credit, coverY: 50 }); }}>🖼 Añadir portada</button>`}
           ${!(page.comments || []).length && html`<button onClick=${() => setCommentsOpen(true)}>💬 Añadir comentario</button>`}
         </div>`}
         <${Title} key=${'title-' + page.id} page=${page} />
@@ -359,33 +388,8 @@
         ${isDb ? html`<${NC.DatabaseView} page=${page} />` : html`<${NC.Editor} key=${'editor-' + page.id} page=${page} readOnly=${locked} />`}
         ${!isDb && !locked && html`<${NC.EmptyPageStarter} page=${page} />`}
       </div>
-      ${emoji && html`<${NC.EmojiPicker} anchor=${emoji} onClose=${() => setEmoji(null)} onPick=${(e) => { A.updatePage(page.id, { icon: e }); setEmoji(null); }} />`}
+      ${emoji && html`<${NC.IconPicker} anchor=${emoji} current=${page.icon} onClose=${() => setEmoji(null)} onPick=${(e) => { A.updatePage(page.id, { icon: e }); setEmoji(null); }} />`}
     </div>`;
-  }
-
-  function CoverPicker({ page, anchor, onClose }) {
-    const [url, setUrl] = useState('');
-    const fileRef = useRef(null);
-    const onFile = (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
-      const r = new FileReader();
-      r.onload = () => { A.updatePage(page.id, { cover: r.result }); onClose(); };
-      r.readAsDataURL(f);
-    };
-    return html`<${NC.Popover} anchor=${anchor} onClose=${onClose} className="menu cover-picker" align="right">
-      <div className="menu-label">Colores y degradados</div>
-      <div className="cover-grid">
-        ${NC.COVERS.map((c) => html`<button key=${c} style=${{ background: c }} onClick=${() => { A.updatePage(page.id, { cover: c }); onClose(); }}></button>`)}
-      </div>
-      <div className="menu-label">Imagen</div>
-      <form className="row-form" onSubmit=${(e) => { e.preventDefault(); if (/^https?:\/\//.test(url)) { A.updatePage(page.id, { cover: url }); onClose(); } else NC.toast('URL no válida'); }}>
-        <input className="menu-input" placeholder="https://…" value=${url} onInput=${(e) => setUrl(e.target.value)} />
-        <button className="btn-primary" type="submit">OK</button>
-      </form>
-      <button className="menu-item" onClick=${() => fileRef.current.click()}><span>⬆</span> Subir imagen</button>
-      <input type="file" accept="image/*" hidden ref=${fileRef} onChange=${onFile} />
-    <//>`;
   }
 
   /* ---------- Vista previa de fila (row-peek de AppFlowy) ---------- */

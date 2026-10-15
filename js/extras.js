@@ -115,7 +115,7 @@
     if (!links.length) return null;
     return html`<div className="backlinks">
       <button className="btn-ghost small" onClick=${() => setOpen(!open)}>↙ ${links.length} ${links.length === 1 ? 'enlace inverso' : 'enlaces inversos'}</button>
-      ${open && html`<div className="backlink-list">${links.map((p) => html`<a key=${p.id} onClick=${() => NC.navigate(p.id)}>${p.icon || '📄'} ${p.title || 'Sin título'}</a>`)}</div>`}
+      ${open && html`<div className="backlink-list">${links.map((p) => html`<a key=${p.id} onClick=${() => NC.navigate(p.id)}><${NC.Icon} icon=${p.icon} /> ${p.title || 'Sin título'}</a>`)}</div>`}
     </div>`;
   };
 
@@ -173,7 +173,7 @@
     const upcoming = all.filter((r) => r.due > now);
     const open = (r) => { close(); NC.navigate(r.page.id + '?b=' + r.block.id); };
     const item = (r) => html`<div key=${r.key} className=${'inbox-item' + (r.due <= now && !sn.has(r.key) ? ' unread' : '')} onClick=${() => open(r)}>
-      <span className="tree-icon">${r.page.icon || '📄'}</span>
+      <span className="tree-icon"><${NC.Icon} icon=${r.page.icon} /></span>
       <div className="grow"><div><b>${r.page.title || 'Sin título'}</b></div><div className="muted small snippet">${r.text}</div></div>
       <span className="muted small">⏰ ${NC.formatDate(r.date)}</span>
     </div>`;
@@ -244,7 +244,7 @@
       ${!mine.length && html`<div className="muted pad">Usa «Guardar como plantilla» en el menú ··· de cualquier página.</div>`}
       <div className="tpl-grid">
         ${mine.map((p) => html`<div key=${p.id} className="tpl-card" onClick=${() => pick({ pageId: p.id })}>
-          <span className="tpl-icon">${p.icon || '📄'}</span><b>${(p.title || '').replace(/^Plantilla:\s*/, '')}</b>
+          <span className="tpl-icon"><${NC.Icon} icon=${p.icon} /></span><b>${(p.title || '').replace(/^Plantilla:\s*/, '')}</b>
           <span className="tpl-actions">
             <button className="mini" title="Editar plantilla" onClick=${(e) => { e.stopPropagation(); onClose(); NC.navigate(p.id); }}>✎</button>
             <button className="mini" title="Eliminar plantilla" onClick=${(e) => { e.stopPropagation(); A.deleteForever(p.id); }}>🗑</button>

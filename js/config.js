@@ -22,6 +22,10 @@ window.NOTAS_CONFIG = {
   //    p. ej. '1234567890-abc123.apps.googleusercontent.com'.
   desktopGoogleClientId: '254436539916-83tpf9o3reujukad8coo73v5emgapk0k.apps.googleusercontent.com',
 
+  // Opcional: clave "Access Key" de https://unsplash.com/developers (app gratuita) para buscar
+  // portadas en Unsplash. Sin clave, el buscador usa Openverse (fotos con licencia libre).
+  unsplashAccessKey: '',
+
   // Enlace de descarga del instalador para Mac que se muestra en la versión web.
   macDownloadUrl: 'dist/Notas-de-L.dmg',
 };

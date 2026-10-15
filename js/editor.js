@@ -88,7 +88,7 @@
       .filter((p) => !p.isTemplate && !A.isInTrash(p.id) && (!n || normalizeStr(p.title || 'sin titulo').includes(n)))
       .sort((a, b) => b.updatedAt - a.updatedAt)
       .slice(0, 8)
-      .map((p) => ({ kind: 'page', id: p.id, label: p.title || 'Sin título', desc: p.rowOf ? 'Fila de base de datos' : 'Página', icon: p.icon || (p.type === 'database' ? '🗃️' : '📄') }));
+      .map((p) => ({ kind: 'page', id: p.id, label: p.title || 'Sin título', desc: p.rowOf ? 'Fila de base de datos' : 'Página', icon: NC.iconText(p.icon, p.type === 'database' ? '🗃️' : '📄') }));
     return [...pages, ...dates];
   };
 
@@ -127,7 +127,7 @@
     const s = NC.getState();
     el.querySelectorAll('.mention[data-page]').forEach((m) => {
       const p = s.pages[m.getAttribute('data-page')];
-      const text = p && !A.isInTrash(p.id) ? (p.icon || (p.type === 'database' ? '🗃️' : '📄')) + ' ' + (p.title || 'Sin título') : '⚠️ Página eliminada';
+      const text = p && !A.isInTrash(p.id) ? NC.iconText(p.icon, p.type === 'database' ? '🗃️' : '📄') + ' ' + (p.title || 'Sin título') : '⚠️ Página eliminada';
       if (m.textContent !== text) m.textContent = text;
     });
     el.querySelectorAll('.mention[data-date]').forEach((m) => {
@@ -169,17 +169,28 @@
   }
   NC.RichText = RichText;
 
+  const LANG_ALIAS = { js: 'javascript', ts: 'typescript', py: 'python', sh: 'bash', shell: 'bash', html: 'markup', xml: 'markup', 'c++': 'cpp', yml: 'yaml', md: 'markdown', golang: 'go', rs: 'rust' };
+  NC.CODE_LANGS = ['javascript', 'typescript', 'python', 'json', 'bash', 'sql', 'java', 'c', 'cpp', 'css', 'markup', 'markdown', 'yaml', 'go', 'rust', 'php'];
+  const highlight = (text, lang) => {
+    const l = LANG_ALIAS[(lang || '').toLowerCase()] || (lang || '').toLowerCase();
+    const g = window.Prism && Prism.languages[l];
+    try { return g ? Prism.highlight(text, g, l) : NC.escapeHtml(text); } catch (e) { return NC.escapeHtml(text); }
+  };
+
   function CodeText({ b, ctx }) {
     const ref = useRef(null);
     useLayoutEffect(() => {
       const el = ref.current;
       if (el && el.textContent !== (b.text || '')) el.textContent = b.text || '';
     });
-    return html`<pre ref=${ref} className="code-text" contentEditable=${ctx.readOnly ? 'false' : 'plaintext-only'} suppressContentEditableWarning
-      spellCheck=${false} data-editable-id=${b.id}
-      onFocus=${() => ctx.onFocusBlock(b)}
-      onInput=${(e) => A.updateBlock(ctx.pageId, b.id, { text: e.currentTarget.textContent })}
-      onKeyDown=${(e) => ctx.onKeyDown(b, e)} />`;
+    return html`<div className="code-wrap">
+      <pre className="code-hl" aria-hidden="true" dangerouslySetInnerHTML=${{ __html: highlight(b.text || '', b.lang) + '\n' }}></pre>
+      <pre ref=${ref} className="code-text" contentEditable=${ctx.readOnly ? 'false' : 'plaintext-only'} suppressContentEditableWarning
+        spellCheck=${false} data-editable-id=${b.id}
+        onFocus=${() => ctx.onFocusBlock(b)}
+        onInput=${(e) => A.updateBlock(ctx.pageId, b.id, { text: e.currentTarget.textContent })}
+        onKeyDown=${(e) => ctx.onKeyDown(b, e)} />
+    </div>`;
   }
 
   /* ---------- Bloques especiales básicos ---------- */
@@ -188,7 +199,7 @@
     const fileRef = useRef(null);
     if (b.url) {
       return html`<figure className="image-block" tabIndex=${0} data-editable-id=${b.id} onKeyDown=${(e) => ctx.onKeyDown(b, e)}>
-        <img src=${b.url} alt="" style=${{ width: b.width ? b.width + '%' : '100%' }} />
+        <${NC.AssetImg} src=${b.url} style=${{ width: b.width ? b.width + '%' : '100%' }} />
         ${!ctx.readOnly && html`<div className="image-tools">
           ${[25, 50, 75, 100].map((w) => html`<button key=${w} onClick=${() => A.updateBlock(ctx.pageId, b.id, { width: w })}>${w}%</button>`)}
           <button onClick=${() => A.updateBlock(ctx.pageId, b.id, { url: '' })}>Cambiar</button>
@@ -198,10 +209,8 @@
     const onFile = (e) => {
       const f = e.target.files[0];
       if (!f) return;
-      if (f.size > 700e3) NC.toast('Imagen grande: no se sincronizará. Usa una imagen por URL si puedes.');
-      const reader = new FileReader();
-      reader.onload = () => A.updateBlock(ctx.pageId, b.id, { url: reader.result });
-      reader.readAsDataURL(f);
+      NC.toast('Optimizando imagen…');
+      NC.compressImage(f).then(NC.assets.put).then((ref) => A.updateBlock(ctx.pageId, b.id, { url: ref })).catch((er) => NC.toast(er.message));
     };
     const submit = (e) => {
       e.preventDefault();
@@ -230,7 +239,7 @@
     const fallback = p.type === 'database' ? '🗃️' : '📄';
     return html`<div className="page-link" tabIndex=${0} data-editable-id=${b.id} onKeyDown=${(e) => ctx.onKeyDown(b, e)}
       onClick=${() => NC.navigate(p.id)}>
-      <span className="pl-icon">${p.icon || fallback}</span>
+      <span className="pl-icon"><${NC.Icon} icon=${p.icon} fallback=${fallback} /></span>
       <span className="pl-title">${p.title || 'Sin título'}</span>
     </div>`;
   }
@@ -335,16 +344,17 @@
         break;
       case 'callout':
         content = html`<div className="callout">
-          <button className="callout-icon" onClick=${(e) => !ctx.readOnly && setEmojiAnchor(e.currentTarget)}>${b.icon || '💡'}</button>
+          <button className="callout-icon" onClick=${(e) => !ctx.readOnly && setEmojiAnchor(e.currentTarget)}><${NC.Icon} icon=${b.icon} fallback="💡" /></button>
           <${RichText} b=${b} ctx=${ctx} />
-          ${emojiAnchor && html`<${NC.EmojiPicker} anchor=${emojiAnchor} onClose=${() => setEmojiAnchor(null)}
+          ${emojiAnchor && html`<${NC.IconPicker} anchor=${emojiAnchor} current=${b.icon} onClose=${() => setEmojiAnchor(null)}
             onPick=${(e) => { A.updateBlock(ctx.pageId, b.id, { icon: e || '💡' }); setEmojiAnchor(null); }} />`}
         </div>`;
         break;
       case 'code':
         content = html`<div className="code-block">
           <div className="code-head">
-            <input className="code-lang" value=${b.lang || ''} placeholder="lenguaje" readOnly=${ctx.readOnly} onInput=${(e) => A.updateBlock(ctx.pageId, b.id, { lang: e.target.value })} />
+            <input className="code-lang" list="code-langs" value=${b.lang || ''} placeholder="lenguaje" readOnly=${ctx.readOnly} onInput=${(e) => A.updateBlock(ctx.pageId, b.id, { lang: e.target.value })} />
+            <datalist id="code-langs">${NC.CODE_LANGS.map((l) => html`<option key=${l} value=${l} />`)}</datalist>
             <button className="btn-ghost small" onClick=${() => { navigator.clipboard && navigator.clipboard.writeText(b.text || ''); NC.toast('Código copiado'); }}>Copiar</button>
           </div>
           <${CodeText} b=${b} ctx=${ctx} />
@@ -460,6 +470,9 @@
     const slashRef = useRef(null);
     slashRef.current = slash;
     const [mention, setMention] = useState(null); // {blockId, query, index, rect, link}
+    const [emojiMenu, setEmojiMenu] = useState(null); // {blockId, query, index, rect}
+    const emojiRef = useRef(null);
+    emojiRef.current = emojiMenu;
     const mentionRef = useRef(null);
     mentionRef.current = mention;
     const [drop, setDrop] = useState(null);
@@ -507,7 +520,18 @@
       if (doFocus) focus(b.id, 'end');
     };
 
-    const closeMenus = () => { slashRef.current && setSlash(null); mentionRef.current && setMention(null); };
+    const closeMenus = () => { slashRef.current && setSlash(null); mentionRef.current && setMention(null); emojiRef.current && setEmojiMenu(null); };
+    const emojiItems = (q) => NC.searchEmoji(q, 8).map((e) => ({ id: e[0], icon: e[0], label: e[1], desc: ':' + q, group: 'Emoji' }));
+    const applyEmoji = (item) => {
+      const menu = emojiRef.current;
+      setEmojiMenu(null);
+      if (!menu) return;
+      const el = elOf(menu.blockId);
+      if (!el) return;
+      eraseTrigger(el, menu.query.length + 1);
+      NC.setCaret(el, NC.getCaretOffset(el));
+      document.execCommand('insertText', false, item.icon);
+    };
 
     // Borra "/consulta" o "@consulta" antes del cursor
     const eraseTrigger = (el, len) => {
@@ -657,6 +681,12 @@
         const cur = slashRef.current;
         setSlash({ blockId: b.id, query: ms[1], index: cur && cur.blockId === b.id && cur.query === ms[1] ? cur.index : 0, rect });
         mentionRef.current && setMention(null);
+      } else if (before.match(/(?:^|\s):([a-záéíóúñü]{2,24})$/i)) {
+        const q = before.match(/(?:^|\s):([a-záéíóúñü]{2,24})$/i)[1];
+        if (!NC.searchEmoji(q, 1).length) return closeMenus();
+        const rect = NC.caretRect() || el.getBoundingClientRect();
+        const cur = emojiRef.current;
+        setEmojiMenu({ blockId: b.id, query: q, index: cur && cur.query === q ? cur.index : 0, rect });
       } else if (mm) {
         const rect = NC.caretRect() || el.getBoundingClientRect();
         const cur = mentionRef.current;
@@ -684,6 +714,8 @@
       if (sm && sm.blockId === b.id && menuKeys(e, sm, setSlash, filterSlash(sm.query), applySlash)) return;
       const mm = mentionRef.current;
       if (mm && mm.blockId === b.id && menuKeys(e, mm, setMention, mentionItems(mm.query, mm.link), applyMention)) return;
+      const em = emojiRef.current;
+      if (em && em.blockId === b.id && menuKeys(e, em, setEmojiMenu, emojiItems(em.query), applyEmoji)) return;
 
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -1060,6 +1092,7 @@
       <div className="editor-tail" onClick=${clickTail}></div>
       ${slash && html`<${FloatingMenu} menu=${slash} items=${filterSlash(slash.query)} onPick=${applySlash} setIndex=${(i) => setSlash({ ...slashRef.current, index: i })} />`}
       ${mention && html`<${FloatingMenu} menu=${mention} items=${mentionItems(mention.query, mention.link)} onPick=${applyMention} setIndex=${(i) => setMention({ ...mentionRef.current, index: i })} />`}
+      ${emojiMenu && html`<${FloatingMenu} menu=${emojiMenu} items=${emojiItems(emojiMenu.query)} onPick=${applyEmoji} setIndex=${(i) => setEmojiMenu({ ...emojiRef.current, index: i })} width=${260} />`}
       ${dateEdit && html`<${DateMentionEditor} edit=${dateEdit} pageId=${pageId} onClose=${() => setDateEdit(null)} />`}
     </div>`;
   };

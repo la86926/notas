@@ -15,7 +15,11 @@ Inicias sesión con tu cuenta de Google y tus cambios se sincronizan en la nube 
 - **Selección múltiple** (Esc, Shift+↑/↓, arrastrar desde el margen), **⌘Z/⌘⇧Z** deshacer y rehacer, **⌘F** buscar y reemplazar, **historial de versiones**.
 - **Comentarios** en bloques, en texto seleccionado y en la página. **Enlaces inversos**.
 - **Plantillas** (incluidas y propias), **bloquear página**, texto pequeño, ancho completo, tipografías, **exportar a PDF/Markdown**.
-- **Portada** que se puede mover y redimensionar, iconos y modo oscuro.
+- **Portadas como en Notion**: galería de colores y fotos de Unsplash, subir (se comprime sola), enlace y buscador de fotos. Se puede mover y cambiar la altura.
+- **Iconos**: emojis con buscador en español, recientes, o una imagen propia. Escribe `:` en el texto para insertar emojis.
+- **Imágenes y archivos** comprimidos y sincronizados aparte de la página (sin límite por página).
+- **Sincronización en tiempo real** con fusión por bloque: si editas bloques distintos en el Mac y en la web a la vez, se conservan ambos cambios.
+- **Código** con colores de sintaxis, **Mover a…** otra página, modo oscuro.
 - **Bases de datos** con vistas Tabla, Tablero, Calendario y Galería.
 
 ## Instalar en un Mac
@@ -65,7 +69,9 @@ La sincronización es *local-first*: la app guarda siempre en el dispositivo y s
 
 Si editas la misma página en dos sitios a la vez, se queda la edición más reciente. Sin conexión puedes seguir trabajando y los cambios se suben al volver. La primera vez que entras en un dispositivo nuevo, la app pregunta si usar las notas de la nube o combinarlas con las locales.
 
-Límite: cada página puede ocupar como máximo unos 900 KB. Para fotos grandes, usa imágenes por URL en lugar de subirlas.
+Las imágenes subidas se comprimen en el dispositivo y se guardan como archivos aparte (`users/{tu-uid}/assets`), así que una página nunca supera el límite de tamaño.
+
+**Buscar portadas en Unsplash:** crea una app gratuita en <https://unsplash.com/developers>, copia su *Access Key* en `unsplashAccessKey` de `js/config.js`, recompila y sube. Sin clave se usa Openverse.
 
 ## Desarrollo
 

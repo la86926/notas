@@ -81,7 +81,7 @@
     while (p) { chain.unshift(p); p = s.pages[p.rowOf || p.parentId]; }
     return html`<div className="breadcrumb-block">${chain.map((c, i) => html`<${React.Fragment} key=${c.id}>
       ${i > 0 && html`<span className="crumb-sep">/</span>`}
-      <a onClick=${() => NC.navigate(c.id)}>${c.icon || '📄'} ${c.title || 'Sin título'}</a>
+      <a onClick=${() => NC.navigate(c.id)}><${NC.Icon} icon=${c.icon} /> ${c.title || 'Sin título'}</a>
     <//>`)}</div>`;
   };
 
@@ -172,21 +172,26 @@
   const fmtSize = (n) => (n > 1e6 ? (n / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1e3)) + ' KB');
   R.file = function FileBlock({ b, ctx }) {
     const ref = useRef(null);
+    const href = NC.useAsset(b.url);
     const pick = (e) => {
       const f = e.target.files[0];
       if (!f) return;
       if (f.size > 3e6) return NC.toast('El archivo es demasiado grande (máx. 3 MB)');
-      if (f.size > 700e3) NC.toast('Archivo grande: se guardará en este dispositivo pero no se sincronizará');
-      const r = new FileReader();
-      r.onload = () => A.updateBlock(ctx.pageId, b.id, { url: r.result, name: f.name, size: f.size });
-      r.readAsDataURL(f);
+      const save = (data) => NC.assets.put(data).then((u) => A.updateBlock(ctx.pageId, b.id, { url: u, name: f.name, size: f.size }));
+      if (/^image\/(png|jpe?g|webp)$/.test(f.type)) NC.compressImage(f).then(save);
+      else {
+        if (f.size > 700e3) NC.toast('Archivo grande: se guardará en este dispositivo pero no se sincronizará');
+        const r = new FileReader();
+        r.onload = () => save(r.result);
+        r.readAsDataURL(f);
+      }
     };
     if (!b.url) return html`<div className="block-empty">📎 Archivo
       <button className="btn-primary" onClick=${() => ref.current.click()}>Elegir archivo</button>
       <input type="file" hidden ref=${ref} onChange=${pick} /></div>`;
     return html`<div className="file-block">
       <span className="file-icon">📎</span>
-      <a href=${b.url} download=${b.name || 'archivo'}>${b.name || 'archivo'}</a>
+      ${href ? html`<a href=${href} download=${b.name || 'archivo'}>${b.name || 'archivo'}</a>` : html`<span className="muted">${b.name || 'archivo'} (cargando…)</span>`}
       <span className="muted small">${b.size ? fmtSize(b.size) : ''}</span>
     </div>`;
   };
@@ -226,7 +231,7 @@
           : html`<div className="menu-label">Base de datos</div>
               <select className="menu-input" value=${b.dbId || ''} onChange=${(e) => A.updateBlock(ctx.pageId, b.id, { dbId: e.target.value })}>
                 <option value="">Elige…</option>
-                ${dbs.map((d) => html`<option key=${d.id} value=${d.id}>${d.icon || '🗃️'} ${d.title || 'Sin título'}</option>`)}
+                ${dbs.map((d) => html`<option key=${d.id} value=${d.id}>${NC.iconText(d.icon, '🗃️')} ${d.title || 'Sin título'}</option>`)}
               </select>
               <div className="menu-label">Título de la nueva fila</div>
               <input className="menu-input" defaultValue=${b.rowTitle || ''} onInput=${(e) => A.updateBlock(ctx.pageId, b.id, { rowTitle: e.target.value })} />`}

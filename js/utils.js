@@ -194,6 +194,7 @@
   ];
   NC.coverStyle = (cover) => {
     if (!cover) return null;
+    if (/^asset:[a-z0-9]+$/i.test(cover)) return { background: 'var(--bg-hover)' }; // se resuelve en la portada
     if (/^(https?:|data:image\/)/.test(cover)) return { backgroundImage: `url(${JSON.stringify(cover)})` };
     return NC.COVERS.includes(cover) ? { background: cover } : null;
   };

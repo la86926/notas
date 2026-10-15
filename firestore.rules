@@ -21,6 +21,15 @@ service cloud.firestore {
         && request.resource.data.data.size() < 1000000;
     }
 
+    // Imágenes y archivos subidos (comprimidos en el dispositivo)
+    match /users/{uid}/assets/{assetId} {
+      allow read, delete: if esL() && request.auth.uid == uid;
+      allow create, update: if esL() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 1040000;
+    }
+
     match /users/{uid}/meta/{docId} {
       allow read, write: if esL() && request.auth.uid == uid;
     }

@@ -201,7 +201,7 @@
           ${rows.map((r) => html`<tr key=${r.id}>
             <td><div className="title-cell">
               <span className="row-handle" onClick=${(e) => setRowMenu({ anchor: e.currentTarget, row: r })}>⋮⋮</span>
-              ${r.icon && html`<span className="row-icon">${r.icon}</span>`}
+              ${r.icon && html`<span className="row-icon"><${NC.Icon} icon=${r.icon} /></span>`}
               <input className="cell-input title-input" value=${r.title} placeholder="Sin título" onInput=${(e) => A.updatePage(r.id, { title: e.target.value })} />
               <button className="open-btn" onClick=${() => A.setUI({ peek: r.id })}>⤢ ABRIR</button>
             </div></td>
@@ -286,7 +286,7 @@
               onDragEnd=${() => { drag.current = null; setOver(null); }}
               onDrop=${dropOn(col.id, r.id)}
               onClick=${() => A.setUI({ peek: r.id })}>
-            <div className="card-title">${r.icon && html`<span>${r.icon} </span>`}${r.title || html`<span className="muted">Sin título</span>`}</div>
+            <div className="card-title">${r.icon && html`<span><${NC.Icon} icon=${r.icon} /> </span>`}${r.title || html`<span className="muted">Sin título</span>`}</div>
             <${CardProps} db=${db} row=${r} exclude=${group.id} />
           </div>`)}
           <button className="board-add" onClick=${() => A.setUI({ peek: A.addRow(dbId, { [group.id]: col.id }) })}>+ Nueva</button>
@@ -350,7 +350,7 @@
             </div>
             ${(byDay[key] || []).map((r) => html`<div key=${r.id} className="cal-item" draggable=${true}
               onDragStart=${(e) => { drag.current = r.id; e.dataTransfer.setData('text/plain', 'row'); }}
-              onClick=${() => A.setUI({ peek: r.id })}>${r.icon ? r.icon + ' ' : ''}${r.title || 'Sin título'}</div>`)}
+              onClick=${() => A.setUI({ peek: r.id })}>${r.icon ? NC.iconText(r.icon) + ' ' : ''}${r.title || 'Sin título'}</div>`)}
           </div>`;
         })}
       </div>
@@ -368,10 +368,10 @@
         const img = (r.blocks || []).find((b) => b.type === 'image' && b.url);
         return html`<div key=${r.id} className="g-card" onClick=${() => A.setUI({ peek: r.id })}>
           <div className="g-preview" style=${cover || {}}>
-            ${img ? html`<img src=${img.url} alt="" />` : !cover && html`<pre>${preview(r)}</pre>`}
+            ${img ? html`<${NC.AssetImg} src=${img.url} />` : !cover && html`<pre>${preview(r)}</pre>`}
           </div>
           <div className="g-body">
-            <div className="card-title">${r.icon && html`<span>${r.icon} </span>`}${r.title || html`<span className="muted">Sin título</span>`}</div>
+            <div className="card-title">${r.icon && html`<span><${NC.Icon} icon=${r.icon} /> </span>`}${r.title || html`<span className="muted">Sin título</span>`}</div>
             <${CardProps} db=${db} row=${r} />
           </div>
         </div>`;

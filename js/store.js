@@ -34,7 +34,7 @@
     Object.values(s.pages).forEach((p) => {
       NC.walkBlocks(p.blocks || [], (b) => {
         b.html = NC.sanitize(b.html || '');
-        if (b.url && !/^(https?:|data:(image|application|audio|video)\/|data:text\/plain)/.test(b.url)) b.url = '';
+        if (b.url && !/^(https?:|asset:[a-z0-9]+$|data:(image|application|audio|video)\/|data:text\/plain)/i.test(b.url)) b.url = '';
         if (Array.isArray(b.rows)) b.rows = b.rows.map((row) => (Array.isArray(row) ? row.map((c) => NC.sanitize(String(c || ''))) : []));
       });
       if (p.cover && !NC.coverStyle(p.cover)) p.cover = null;

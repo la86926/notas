@@ -46,6 +46,45 @@
     return (h >>> 0).toString(36) + ':' + str.length;
   };
   const pageJson = (p) => JSON.stringify(p);
+  // Última versión sincronizada de cada página (base para fusionar cambios simultáneos)
+  const base = new Map();
+
+  /* Fusión a tres bandas por bloque, como en Notion: si editas bloques distintos en dos
+   * dispositivos a la vez, se conservan ambos cambios. Ante el mismo bloque gana la edición local. */
+  function merge3(b, l, r) {
+    const key = (x) => JSON.stringify(x);
+    const out = { ...r };
+    for (const k of new Set([...Object.keys(l), ...Object.keys(r)])) {
+      if (k === 'blocks' || k === 'updatedAt') continue;
+      if (key(l[k]) !== key(b[k])) out[k] = l[k];
+    }
+    const bMap = new Map((b.blocks || []).map((x) => [x.id, key(x)]));
+    const lMap = new Map((l.blocks || []).map((x) => [x.id, x]));
+    const rIds = new Set((r.blocks || []).map((x) => x.id));
+    const result = [];
+    for (const rb of r.blocks || []) {
+      const lb = lMap.get(rb.id);
+      if (!lb) {
+        if (bMap.has(rb.id) && bMap.get(rb.id) === key(rb)) continue; // borrado aquí y sin cambios allí
+        result.push(rb);
+        continue;
+      }
+      const localChanged = !bMap.has(rb.id) || bMap.get(rb.id) !== key(lb);
+      result.push(localChanged ? lb : rb);
+    }
+    (l.blocks || []).forEach((lb, i) => {
+      if (rIds.has(lb.id) || bMap.has(lb.id)) return; // solo bloques nuevos de este dispositivo
+      let pos = 0;
+      for (let j = i - 1; j >= 0; j--) {
+        const idx = result.findIndex((x) => x.id === l.blocks[j].id);
+        if (idx >= 0) { pos = idx + 1; break; }
+      }
+      result.splice(pos, 0, lb);
+    });
+    out.blocks = result.length ? result : r.blocks;
+    out.updatedAt = Math.max(l.updatedAt || 0, r.updatedAt || 0);
+    return out;
+  }
 
   if (!sync.enabled) return;
 
@@ -59,6 +98,7 @@
   let unsubPages = null;
   let unsubMeta = null;
   let user = null;
+  sync._ctx = () => (user ? { db, uid: user.uid } : null);
   const pagesCol = () => db.collection('users').doc(user.uid).collection('pages');
   const metaDoc = () => db.collection('users').doc(user.uid).collection('meta').doc('workspace');
 
@@ -87,6 +127,7 @@
       await initialMerge();
       startListeners();
       schedulePush(0);
+      NC.assets && NC.assets.flush();
     } catch (e) {
       console.error(e);
       setStatus({ state: 'error', error: e.message });
@@ -175,6 +216,7 @@
         const raw = d.data().data;
         remote[d.id] = NC.sanitizePage(JSON.parse(raw));
         meta.hashes[d.id] = hash(pageJson(remote[d.id]));
+        base.set(d.id, pageJson(remote[d.id]));
       } catch (e) { /* documento dañado */ }
     });
     let remoteRoots = [];
@@ -215,17 +257,29 @@
           }
           const d = ch.doc.data();
           const rh = hash(d.data);
+          let remoteP;
+          try { remoteP = NC.sanitizePage(JSON.parse(d.data)); } catch (e) { return; }
+          const remoteJson = pageJson(remoteP);
           if (local) {
             const lh = hash(pageJson(local));
-            if (lh === rh) return void (meta.hashes[id] = rh);
+            if (lh === rh || lh === hash(remoteJson)) { meta.hashes[id] = lh; base.set(id, remoteJson); return; }
             const dirty = meta.hashes[id] !== lh;
-            if (dirty && (local.updatedAt || 0) > (d.updatedAt || 0)) return; // gana lo local; se subirá
+            if (dirty) {
+              // cambios en los dos lados a la vez: fusionar por bloque
+              const b = base.get(id);
+              if (b) s.pages[id] = NC.sanitizePage(merge3(JSON.parse(b), local, remoteP));
+              else if ((local.updatedAt || 0) <= (d.updatedAt || 0)) s.pages[id] = remoteP;
+              base.set(id, remoteJson);
+              meta.hashes[id] = hash(remoteJson); // lo que hay en el servidor; lo fusionado se subirá
+              changed = true;
+              schedulePush(150);
+              return;
+            }
           }
-          try {
-            s.pages[id] = NC.sanitizePage(JSON.parse(d.data));
-            meta.hashes[id] = hash(pageJson(s.pages[id])); // hash de la versión local (saneada)
-            changed = true;
-          } catch (e) { /* documento dañado */ }
+          s.pages[id] = remoteP;
+          base.set(id, remoteJson);
+          meta.hashes[id] = hash(remoteJson);
+          changed = true;
         });
         saveMeta();
         if (changed) A.remoteApplied();
@@ -264,7 +318,7 @@
   let again = false;
   const tooBig = new Set();
 
-  function schedulePush(delay = 900) {
+  function schedulePush(delay = 500) {
     if (!user) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(push, delay);
@@ -313,7 +367,7 @@
         const last = i >= ops.length;
         if (last && pushRoots) batch.set(metaDoc(), { rootIds: rootsJson, updatedAt: Date.now() });
         await batch.commit();
-        chunk.forEach((op) => (op.kind === 'set' ? (meta.hashes[op.id] = op.h) : delete meta.hashes[op.id]));
+        chunk.forEach((op) => (op.kind === 'set' ? ((meta.hashes[op.id] = op.h), base.set(op.id, op.data.data)) : (delete meta.hashes[op.id], base.delete(op.id))));
         if (last && pushRoots) meta.metaHash = rootsHash;
         saveMeta();
         if (last) break;
